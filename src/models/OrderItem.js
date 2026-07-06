@@ -1,0 +1,17 @@
+module.exports = (sequelize, DataTypes) => sequelize.define('OrderItem', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  order_id: { type: DataTypes.INTEGER, allowNull: false },
+  variant_id: { type: DataTypes.INTEGER, allowNull: true },
+  product_name: { type: DataTypes.STRING(300), allowNull: false },
+  sku: { type: DataTypes.STRING(100), allowNull: false },
+  pack_size: { type: DataTypes.STRING(100), allowNull: true },
+  color: { type: DataTypes.STRING(50), allowNull: true },
+  width: { type: DataTypes.STRING(20), allowNull: true },
+  length: { type: DataTypes.STRING(20), allowNull: true },
+  quantity: { type: DataTypes.INTEGER, allowNull: false },
+  unit_price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  mrp: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  gst_percent: { type: DataTypes.DECIMAL(5, 2), defaultValue: 18 },
+  gst_amount: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  total: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+}, { tableName: 'order_items', timestamps: true, underscored: true });

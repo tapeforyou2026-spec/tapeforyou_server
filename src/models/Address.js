@@ -1,0 +1,16 @@
+module.exports = (sequelize, DataTypes) => sequelize.define('Address', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  user_id: { type: DataTypes.INTEGER, allowNull: false },
+  type: { type: DataTypes.ENUM('home', 'work', 'other'), defaultValue: 'home' },
+  name: { type: DataTypes.STRING(100), allowNull: false },
+  phone: { type: DataTypes.STRING(15), allowNull: false },
+  line1: { type: DataTypes.STRING(300), allowNull: false },
+  line2: { type: DataTypes.STRING(300), allowNull: true },
+  city: { type: DataTypes.STRING(100), allowNull: false },
+  state: { type: DataTypes.STRING(100), allowNull: false },
+  pincode: { type: DataTypes.STRING(10), allowNull: false },
+  country: { type: DataTypes.STRING(50), defaultValue: 'India' },
+  is_default: { type: DataTypes.BOOLEAN, defaultValue: false },
+  gstin: { type: DataTypes.STRING(20), allowNull: true, comment: 'For B2B billing' },
+  company_name: { type: DataTypes.STRING(200), allowNull: true },
+}, { tableName: 'addresses', timestamps: true, underscored: true });

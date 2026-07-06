@@ -1,0 +1,69 @@
+require('dotenv').config();
+require('express-async-errors');
+
+const express = require('express');
+const helmet = require('helmet');
+const cors = require('cors');
+const morgan = require('morgan');
+const compression = require('compression');
+const cookieParser = require('cookie-parser');
+const path = require('path');
+
+const env = require('./config/env');
+const logger = require('./utils/logger');
+const { general: generalLimit } = require('./middlewares/rateLimiter');
+const errorHandler = require('./middlewares/errorHandler');
+const routes = require('./routes');
+
+const app = express();
+
+// Security
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
+// CORS
+app.use(cors({
+  origin: [env.URLS.FRONTEND, env.URLS.ADMIN],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+}));
+
+// Parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser(env.COOKIE.SECRET));
+
+// Compression
+app.use(compression());
+
+// Logging
+if (env.IS_DEVELOPMENT) {
+  app.use(morgan('dev'));
+} else {
+  app.use(morgan('combined', {
+    stream: { write: (msg) => logger.info(msg.trim()) },
+    skip: (req) => req.url === '/health',
+  }));
+}
+
+// Rate limiting
+app.use('/api', generalLimit);
+
+// Static files
+app.use('/uploads', express.static(path.join(process.cwd(), 'src/uploads')));
+app.use('/public', express.static(path.join(process.cwd(), 'src/public')));
+
+// Health check
+app.get('/health', (req, res) => res.json({ status: 'OK', time: new Date().toISOString() }));
+
+// API Routes
+app.use('/api/v1', routes);
+
+// 404
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: `Route ${req.method} ${req.path} not found` });
+});
+
+// Error handler
+app.use(errorHandler);
+
+module.exports = app;

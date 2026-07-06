@@ -1,0 +1,16 @@
+module.exports = (sequelize, DataTypes) => sequelize.define('Coupon', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  code: { type: DataTypes.STRING(30), allowNull: false, unique: true },
+  type: { type: DataTypes.ENUM('flat', 'percent'), allowNull: false },
+  value: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  min_order_amount: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  max_discount: { type: DataTypes.DECIMAL(10, 2), allowNull: true, comment: 'Max cap for percent coupons' },
+  usage_limit: { type: DataTypes.INTEGER, allowNull: true, comment: 'null = unlimited' },
+  used_count: { type: DataTypes.INTEGER, defaultValue: 0 },
+  per_user_limit: { type: DataTypes.INTEGER, defaultValue: 1 },
+  applicable_for: { type: DataTypes.ENUM('all', 'b2c', 'b2b'), defaultValue: 'all' },
+  starts_at: { type: DataTypes.DATE, allowNull: true },
+  expires_at: { type: DataTypes.DATE, allowNull: true },
+  status: { type: DataTypes.ENUM('active', 'inactive', 'expired'), defaultValue: 'active' },
+  description: { type: DataTypes.STRING(300), allowNull: true },
+}, { tableName: 'coupons', timestamps: true, underscored: true });

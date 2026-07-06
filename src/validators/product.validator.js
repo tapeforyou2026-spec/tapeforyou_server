@@ -1,0 +1,43 @@
+const Joi = require('joi');
+
+exports.createProduct = Joi.object({
+  product_id: Joi.string().max(50).required(),
+  name: Joi.string().max(300).required(),
+  category_id: Joi.number().integer().required(),
+  brand_id: Joi.number().integer().optional(),
+  short_description: Joi.string().max(500).optional().allow('', null),
+  long_description: Joi.string().optional().allow('', null),
+  application: Joi.string().optional().allow('', null),
+  key_features: Joi.string().optional().allow('', null),
+  hsn_code: Joi.string().max(20).optional(),
+  gst_percent: Joi.number().min(0).max(28).default(18),
+  status: Joi.string().valid('active', 'draft', 'inactive').default('draft'),
+  is_featured: Joi.boolean().default(false),
+  seo_title: Joi.string().max(200).optional().allow('', null),
+  seo_description: Joi.string().optional().allow('', null),
+  seo_tags: Joi.string().max(500).optional().allow('', null),
+  notes: Joi.string().optional().allow('', null),
+});
+
+exports.createVariant = Joi.object({
+  sku: Joi.string().max(100).required(),
+  width: Joi.string().max(20).optional().allow('', null),
+  length: Joi.string().max(20).optional().allow('', null),
+  micron: Joi.string().max(20).optional().allow('', null),
+  color: Joi.string().max(50).optional().allow('', null),
+  material: Joi.string().max(100).optional().allow('', null),
+  pack_size: Joi.string().max(100).optional().allow('', null),
+  mrp: Joi.number().positive().required(),
+  selling_price: Joi.number().positive().required(),
+  cost_price: Joi.number().positive().optional().allow(null),
+  b2b_price: Joi.number().positive().optional().allow(null),
+  stock_qty: Joi.number().integer().min(0).default(0),
+  moq_b2c: Joi.number().integer().min(1).default(1),
+  moq_b2b: Joi.number().integer().optional().allow(null),
+  low_stock_alert: Joi.number().integer().default(10),
+  weight: Joi.string().max(30).optional().allow('', null),
+  dim_length: Joi.number().optional().allow(null),
+  dim_width: Joi.number().optional().allow(null),
+  dim_height: Joi.number().optional().allow(null),
+  status: Joi.string().valid('active', 'inactive').default('active'),
+});

@@ -1,0 +1,15 @@
+module.exports = (sequelize, DataTypes) => sequelize.define('Payment', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  order_id: { type: DataTypes.INTEGER, allowNull: false },
+  razorpay_order_id: { type: DataTypes.STRING(100), allowNull: true },
+  razorpay_payment_id: { type: DataTypes.STRING(100), allowNull: true },
+  razorpay_signature: { type: DataTypes.STRING(200), allowNull: true },
+  amount: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
+  currency: { type: DataTypes.STRING(10), defaultValue: 'INR' },
+  method: { type: DataTypes.STRING(50), allowNull: true },
+  status: { type: DataTypes.ENUM('pending', 'paid', 'failed', 'refunded', 'partially_refunded'), defaultValue: 'pending' },
+  gateway_response: { type: DataTypes.JSONB, allowNull: true },
+  refund_id: { type: DataTypes.STRING(100), allowNull: true },
+  refund_amount: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
+  refunded_at: { type: DataTypes.DATE, allowNull: true },
+}, { tableName: 'payments', timestamps: true, underscored: true });
