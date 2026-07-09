@@ -17,9 +17,10 @@ exports.all = async (req, res) => {
 };
 
 exports.create = async (req, res) => {
-  const { name, description, parent_id, sort_order, status, seo_title, seo_description, seo_keywords } = req.body;
+  const { name, description, parent_id, sort_order, status, seo_title, seo_description, seo_keywords, image_url } = req.body;
   const slug = await generateUniqueSlug(name, Category);
-  const image = req.file ? `/uploads/categories/${req.file.filename}` : null;
+  // An uploaded file always wins over a CDN link if both are somehow provided.
+  const image = req.file ? `/uploads/categories/${req.file.filename}` : (image_url || null);
 
   const cat = await Category.create({ name, slug, description, parent_id: parent_id || null, sort_order: sort_order || 0, status: status || 'active', image, seo_title, seo_description, seo_keywords });
   return R.created(res, 'Category created', cat);
@@ -30,7 +31,10 @@ exports.update = async (req, res) => {
   if (!cat) return R.notFound(res);
 
   const updates = { ...req.body };
+  delete updates.image_url;
+  if (updates.parent_id !== undefined) updates.parent_id = updates.parent_id || null;
   if (req.file) updates.image = `/uploads/categories/${req.file.filename}`;
+  else if (req.body.image_url) updates.image = req.body.image_url;
   if (updates.name && updates.name !== cat.name) {
     updates.slug = await generateUniqueSlug(updates.name, Category, 'slug', cat.id);
   }

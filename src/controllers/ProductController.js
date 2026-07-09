@@ -16,6 +16,14 @@ exports.show = async (req, res) => {
   return R.success(res, 'Product fetched', product);
 };
 
+// Admin: fetch by numeric ID (not slug) — includes variants of any status
+// (draft/inactive products included), unlike the public slug-based lookup.
+exports.getById = async (req, res) => {
+  const product = await ProductRepository.findWithVariants(req.params.id);
+  if (!product) return R.notFound(res, 'Product not found');
+  return R.success(res, 'Product fetched', product);
+};
+
 exports.create = async (req, res) => {
   const { name, category_id, brand_id, short_description, long_description, application, key_features, hsn_code, gst_percent, status, is_featured, seo_title, seo_description, seo_tags, notes, product_id } = req.body;
 
@@ -85,6 +93,27 @@ exports.uploadImages = async (req, res) => {
   ));
 
   return R.created(res, 'Images uploaded', images);
+};
+
+exports.addImageLink = async (req, res) => {
+  const product = await ProductRepository.findById(req.params.id);
+  if (!product) return R.notFound(res, 'Product not found');
+
+  const { url } = req.body;
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return R.error(res, 'A valid image URL (starting with http:// or https://) is required');
+  }
+
+  const existingCount = await ProductImage.count({ where: { product_id: product.id, variant_id: null } });
+  const image = await ProductImage.create({
+    product_id: product.id,
+    url,
+    alt: `${product.name} image`,
+    is_primary: existingCount === 0,
+    sort_order: existingCount,
+  });
+
+  return R.created(res, 'Image added', image);
 };
 
 exports.deleteImage = async (req, res) => {

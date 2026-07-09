@@ -8,6 +8,7 @@ const v = require('../validators/product.validator');
 // Public
 router.get('/', ctrl.list);
 router.get('/featured', ctrl.featured);
+router.get('/id/:id', adminProtect, ctrl.getById);
 router.get('/:slug', ctrl.show);
 
 // Admin
@@ -22,6 +23,7 @@ router.delete('/:id/variants/:variantId', adminProtect, ctrl.deleteVariant);
 
 // Images
 router.post('/:id/images', adminProtect, productImages, handleUploadError, ctrl.uploadImages);
+router.post('/:id/images/link', adminProtect, ctrl.addImageLink);
 router.delete('/:id/images/:imageId', adminProtect, ctrl.deleteImage);
 
 // B2B Pricing

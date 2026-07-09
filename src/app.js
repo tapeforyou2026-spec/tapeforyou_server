@@ -11,7 +11,7 @@ const path = require('path');
 
 const env = require('./config/env');
 const logger = require('./utils/logger');
-const { general: generalLimit } = require('./middlewares/rateLimiter');
+const { general: generalLimit, publicCatalog: publicCatalogLimit } = require('./middlewares/rateLimiter');
 const errorHandler = require('./middlewares/errorHandler');
 const routes = require('./routes');
 
@@ -21,8 +21,9 @@ const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // CORS
+const allowedOrigins = [env.URLS.FRONTEND, ...env.URLS.ADMIN.split(',').map((s) => s.trim())];
 app.use(cors({
-  origin: [env.URLS.FRONTEND, env.URLS.ADMIN],
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }));
@@ -47,6 +48,8 @@ if (env.IS_DEVELOPMENT) {
 
 // Rate limiting
 app.use('/api', generalLimit);
+app.use('/api/v1/products', publicCatalogLimit);
+app.use('/api/v1/categories', publicCatalogLimit);
 
 // Static files
 app.use('/uploads', express.static(path.join(process.cwd(), 'src/uploads')));
