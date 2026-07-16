@@ -1,0 +1,18 @@
+module.exports = (sequelize, DataTypes) => sequelize.define('Blog', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  title: { type: DataTypes.STRING(255), allowNull: false },
+  slug: { type: DataTypes.STRING(255), allowNull: false, unique: true },
+  excerpt: { type: DataTypes.TEXT, allowNull: true },
+  content: { type: DataTypes.TEXT, allowNull: true },
+  image: { type: DataTypes.STRING(500), allowNull: true },
+  category: { type: DataTypes.STRING(100), allowNull: false, defaultValue: 'Guides' },
+  author_name: { type: DataTypes.STRING(150), defaultValue: 'Tapes For You Team' },
+  author_avatar: { type: DataTypes.STRING(500), allowNull: true },
+  published_date: { type: DataTypes.DATEONLY, allowNull: false },
+  read_time: { type: DataTypes.STRING(30), defaultValue: '5 min read' },
+  tags: { type: DataTypes.JSONB, defaultValue: [] },
+  seo_title: { type: DataTypes.STRING(255), allowNull: true },
+  seo_description: { type: DataTypes.STRING(500), allowNull: true },
+  seo_keywords: { type: DataTypes.JSONB, defaultValue: [] },
+  status: { type: DataTypes.ENUM('published', 'draft'), defaultValue: 'published' },
+}, { tableName: 'blogs', timestamps: true, underscored: true });

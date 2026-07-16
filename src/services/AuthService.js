@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { Op } = require('sequelize');
 const env = require('../config/env');
 const { hashToken, generateToken } = require('../utils/crypto');
 const { User, RefreshToken } = require('../models');
@@ -66,6 +67,27 @@ class AuthService {
 
   async revokeAllUserTokens(userId) {
     await RefreshToken.update({ is_revoked: true }, { where: { user_id: userId, is_revoked: false } });
+  }
+
+  // "Sessions" reuses RefreshToken rather than a parallel model — every
+  // login already creates one with device_info/ip_address (see issueTokens
+  // above), so an active, non-expired, non-revoked row already *is* a
+  // session. token_hash is never returned to the client.
+  async listActiveSessions(userId) {
+    const sessions = await RefreshToken.findAll({
+      where: { user_id: userId, is_revoked: false, expires_at: { [Op.gt]: new Date() } },
+      attributes: ['id', 'device_info', 'ip_address', 'created_at', 'expires_at'],
+      order: [['created_at', 'DESC']],
+    });
+    return sessions;
+  }
+
+  async revokeSessionById(userId, sessionId) {
+    const [count] = await RefreshToken.update(
+      { is_revoked: true },
+      { where: { id: sessionId, user_id: userId, is_revoked: false } }
+    );
+    return count > 0;
   }
 }
 

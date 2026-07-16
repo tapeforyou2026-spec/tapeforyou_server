@@ -12,4 +12,23 @@ module.exports = (sequelize, DataTypes) => sequelize.define('Payment', {
   refund_id: { type: DataTypes.STRING(100), allowNull: true },
   refund_amount: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
   refunded_at: { type: DataTypes.DATE, allowNull: true },
-}, { tableName: 'payments', timestamps: true, underscored: true });
+}, {
+  tableName: 'payments',
+  timestamps: true,
+  underscored: true,
+  hooks: {
+    // Only fires for instance-level `payment.update(...)` calls (how
+    // RazorpayService.capturePayment sets this), consistent with the
+    // Order model's hooks.
+    afterUpdate: async (payment) => {
+      if (!payment.changed('status') || payment.status !== 'failed') return;
+      const NotificationService = require('../services/NotificationService');
+      await NotificationService.notifyAdmins({
+        type: 'payment',
+        title: 'Payment Failed',
+        body: `Payment of ₹${payment.amount} failed for order #${payment.order_id}`,
+        data: { payment_id: payment.id, order_id: payment.order_id },
+      });
+    },
+  },
+});

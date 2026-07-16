@@ -48,6 +48,12 @@ class ProductRepository extends BaseRepository {
       where,
       include: [
         { model: ProductVariant, as: 'variants', required: false, where: { status: 'active' }, include: [{ model: ProductImage, as: 'images', where: { is_primary: true }, required: false }] },
+        // Product-level images (variant_id: null) — how the admin panel's
+        // standard "Upload Images" button stores them. Without this, listing
+        // pages (shop grid, home page, related products) never see images
+        // uploaded that way, even though the single-product page (findBySlug)
+        // does include them — same data, inconsistent query.
+        { model: ProductImage, as: 'images', where: { variant_id: null, is_primary: true }, required: false },
         { model: Category },
         { model: Brand },
       ],

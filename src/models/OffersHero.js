@@ -1,0 +1,16 @@
+module.exports = (sequelize, DataTypes) => sequelize.define('OffersHero', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  badge_text: { type: DataTypes.STRING(100), defaultValue: 'Limited Time Deals' },
+  heading_line1: { type: DataTypes.STRING(150), allowNull: false },
+  heading_line2: { type: DataTypes.STRING(150), allowNull: true },
+  subheading: { type: DataTypes.STRING(300), allowNull: true },
+  desktop_image: { type: DataTypes.STRING(500), allowNull: true },
+  mobile_image: { type: DataTypes.STRING(500), allowNull: true },
+  coupon_label: { type: DataTypes.STRING(50), defaultValue: 'Extra Savings' },
+  coupon_discount_text: { type: DataTypes.STRING(50), allowNull: true },
+  coupon_code: { type: DataTypes.STRING(30), allowNull: true },
+  shipping_stat_value: { type: DataTypes.STRING(30), defaultValue: 'Free' },
+  shipping_stat_label: { type: DataTypes.STRING(50), defaultValue: 'Ship on ₹499+' },
+  flash_sale_chip_text: { type: DataTypes.STRING(50), allowNull: true },
+  iso_chip_text: { type: DataTypes.STRING(50), allowNull: true },
+}, { tableName: 'offers_hero', timestamps: true, underscored: true });

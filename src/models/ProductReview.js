@@ -7,4 +7,19 @@ module.exports = (sequelize, DataTypes) => sequelize.define('ProductReview', {
   body: { type: DataTypes.TEXT, allowNull: true },
   status: { type: DataTypes.ENUM('pending', 'approved', 'rejected'), defaultValue: 'pending' },
   verified_purchase: { type: DataTypes.BOOLEAN, defaultValue: false },
-}, { tableName: 'product_reviews', timestamps: true, underscored: true });
+}, {
+  tableName: 'product_reviews',
+  timestamps: true,
+  underscored: true,
+  hooks: {
+    afterCreate: async (review) => {
+      const NotificationService = require('../services/NotificationService');
+      await NotificationService.notifyAdmins({
+        type: 'review',
+        title: 'New Customer Review',
+        body: `A ${review.rating}-star review was submitted${review.title ? `: "${review.title}"` : ''}`,
+        data: { review_id: review.id, product_id: review.product_id },
+      });
+    },
+  },
+});

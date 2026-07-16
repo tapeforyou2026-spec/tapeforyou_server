@@ -1,4 +1,4 @@
-const { User, Address, Order } = require('../models');
+const { User, Address, Order, OrderItem, Wishlist, ProductVariant, Product, ProductImage } = require('../models');
 const UserRepository = require('../repositories/UserRepository');
 const { getPagination, getPaginationMeta } = require('../utils/pagination');
 const R = require('../utils/response');
@@ -57,12 +57,43 @@ exports.deleteAddress = async (req, res) => {
 // Admin user management
 exports.adminList = async (req, res) => {
   const { page, limit, offset } = getPagination(req.query);
-  const { rows, count } = await User.findAndCountAll({ limit, offset, order: [['created_at', 'DESC']] });
+  const { rows, count } = await UserRepository.adminList({ search: req.query.q, limit, offset });
   return R.paginated(res, 'Users', rows, getPaginationMeta(count, page, limit));
 };
 
+// Powers the Customers list's "expand row" full detail view — full address
+// book, actual wishlist products (not just a count), and full order history
+// with line items. Each hasMany include uses `separate: true` so they run as
+// independent queries instead of one giant join (which would multiply rows —
+// e.g. 3 orders x 2 wishlist items = 6 duplicated user rows) and so each can
+// carry its own ORDER BY/LIMIT.
 exports.adminDetail = async (req, res) => {
-  const user = await User.findByPk(req.params.id, { include: [{ model: Address, as: 'addresses' }] });
+  const user = await User.findByPk(req.params.id, {
+    include: [
+      { model: Address, as: 'addresses', separate: true, order: [['is_default', 'DESC'], ['created_at', 'ASC']] },
+      {
+        model: Wishlist,
+        as: 'wishlist',
+        separate: true,
+        order: [['created_at', 'DESC']],
+        include: [{
+          model: ProductVariant,
+          as: 'variant',
+          include: [
+            { model: Product, attributes: ['id', 'name', 'slug'] },
+            { model: ProductImage, as: 'images', separate: true, limit: 1, order: [['is_primary', 'DESC'], ['sort_order', 'ASC']] },
+          ],
+        }],
+      },
+      {
+        model: Order,
+        as: 'orders',
+        separate: true,
+        order: [['created_at', 'DESC']],
+        include: [{ model: OrderItem, as: 'items' }],
+      },
+    ],
+  });
   if (!user) return R.notFound(res, 'User not found');
   return R.success(res, 'User details', user);
 };
@@ -70,4 +101,15 @@ exports.adminDetail = async (req, res) => {
 exports.adminUpdateStatus = async (req, res) => {
   await User.update({ status: req.body.status }, { where: { id: req.params.id } });
   return R.success(res, 'User status updated');
+};
+
+// Manual override for when a customer can't complete email verification
+// themselves (email delivery issues, etc). Same permission level as
+// adminUpdateStatus above — any admin, not just super admin.
+exports.adminVerifyEmail = async (req, res) => {
+  const user = await User.findByPk(req.params.id);
+  if (!user) return R.notFound(res, 'User not found');
+
+  await user.update({ email_verified: true, email_verify_token: null, email_verify_expires: null });
+  return R.success(res, 'User marked as verified');
 };

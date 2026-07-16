@@ -36,6 +36,13 @@ const env = {
     PASSWORD: process.env.SHIPROCKET_PASSWORD,
   },
 
+  // smsjust.com — no live credentials yet, SmsService runs in demo mode
+  // (logs the OTP instead of sending) until these are set. See SmsService.js.
+  SMSJUST: {
+    API_KEY: process.env.SMSJUST_API_KEY || null,
+    SENDER_ID: process.env.SMSJUST_SENDER_ID || null,
+  },
+
   SMTP: {
     HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
     PORT: parseInt(process.env.SMTP_PORT) || 587,

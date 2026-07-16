@@ -15,7 +15,13 @@
     "lint": "eslint src/",
     "test": "jest --runInBand"
   },
-  "keywords": ["ecommerce", "tapes", "nodejs", "express", "postgresql"],
+  "keywords": [
+    "ecommerce",
+    "tapes",
+    "nodejs",
+    "express",
+    "postgresql"
+  ],
   "author": "Rich System Solutions Pvt. Ltd.",
   "license": "MIT",
   "dependencies": {
@@ -25,6 +31,7 @@
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
     "express": "^4.19.2",
     "express-async-errors": "^3.1.1",
     "express-rate-limit": "^7.3.1",
@@ -33,24 +40,24 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
     "nodemailer": "^6.9.14",
+    "pdfkit": "^0.15.0",
     "pg": "^8.12.0",
     "pg-hstore": "^2.3.4",
-    "pdfkit": "^0.15.0",
     "razorpay": "^2.9.4",
     "sequelize": "^6.37.3",
     "sequelize-cli": "^6.6.2",
     "sharp": "^0.33.4",
     "slugify": "^1.6.6",
+    "ua-parser-js": "^2.0.10",
     "uuid": "^10.0.0",
     "winston": "^3.13.0",
-    "winston-daily-rotate-file": "^5.0.0",
-    "node-cron": "^3.0.3",
-    "exceljs": "^4.4.0"
+    "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4",
-    "eslint": "^9.5.0"
+    "eslint": "^9.5.0",
+    "nodemon": "^3.1.4"
   },
   "engines": {
     "node": ">=18.0.0"

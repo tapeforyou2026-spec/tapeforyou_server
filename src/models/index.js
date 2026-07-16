@@ -8,10 +8,13 @@ const Permission = require('./Permission')(sequelize, DataTypes);
 const RolePermission = require('./RolePermission')(sequelize, DataTypes);
 const AdminRole = require('./AdminRole')(sequelize, DataTypes);
 const RefreshToken = require('./RefreshToken')(sequelize, DataTypes);
+const OTP = require('./OTP')(sequelize, DataTypes);
+const LoginHistory = require('./LoginHistory')(sequelize, DataTypes);
 const Category = require('./Category')(sequelize, DataTypes);
 const Brand = require('./Brand')(sequelize, DataTypes);
 const Product = require('./Product')(sequelize, DataTypes);
 const ProductVariant = require('./ProductVariant')(sequelize, DataTypes);
+const StockIn = require('./StockIn')(sequelize, DataTypes);
 const ProductImage = require('./ProductImage')(sequelize, DataTypes);
 const ProductReview = require('./ProductReview')(sequelize, DataTypes);
 const B2BPricing = require('./B2BPricing')(sequelize, DataTypes);
@@ -27,6 +30,16 @@ const Shipment = require('./Shipment')(sequelize, DataTypes);
 const Invoice = require('./Invoice')(sequelize, DataTypes);
 const Notification = require('./Notification')(sequelize, DataTypes);
 const ActivityLog = require('./ActivityLog')(sequelize, DataTypes);
+const HeroSlide = require('./HeroSlide')(sequelize, DataTypes);
+const AboutPage = require('./AboutPage')(sequelize, DataTypes);
+const OffersHero = require('./OffersHero')(sequelize, DataTypes);
+const Blog = require('./Blog')(sequelize, DataTypes);
+const ContactPage = require('./ContactPage')(sequelize, DataTypes);
+const ContactSubmission = require('./ContactSubmission')(sequelize, DataTypes);
+const NewsletterSubscriber = require('./NewsletterSubscriber')(sequelize, DataTypes);
+const ChatbotFaq = require('./ChatbotFaq')(sequelize, DataTypes);
+const ChatbotLog = require('./ChatbotLog')(sequelize, DataTypes);
+const Testimonial = require('./Testimonial')(sequelize, DataTypes);
 
 // ── Associations ──────────────────────────────────────────────────
 
@@ -42,6 +55,17 @@ Permission.belongsToMany(Role, { through: RolePermission, foreignKey: 'permissio
 RefreshToken.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(RefreshToken, { foreignKey: 'user_id' });
 
+// OTP → User
+OTP.belongsTo(User, { foreignKey: 'user_id' });
+User.hasMany(OTP, { foreignKey: 'user_id' });
+
+// LoginHistory → User
+LoginHistory.belongsTo(User, { foreignKey: 'user_id' });
+User.hasMany(LoginHistory, { as: 'login_history', foreignKey: 'user_id' });
+
+// ChatbotLog → User (nullable — guest chats have no customer_id)
+ChatbotLog.belongsTo(User, { foreignKey: 'customer_id' });
+
 // Category (self-referential)
 Category.hasMany(Category, { as: 'children', foreignKey: 'parent_id' });
 Category.belongsTo(Category, { as: 'parent', foreignKey: 'parent_id' });
@@ -55,6 +79,10 @@ Brand.hasMany(Product, { foreignKey: 'brand_id' });
 // ProductVariant → Product
 ProductVariant.belongsTo(Product, { foreignKey: 'product_id' });
 Product.hasMany(ProductVariant, { as: 'variants', foreignKey: 'product_id' });
+
+// StockIn → ProductVariant
+StockIn.belongsTo(ProductVariant, { foreignKey: 'variant_id' });
+ProductVariant.hasMany(StockIn, { as: 'stock_ins', foreignKey: 'variant_id' });
 
 // ProductImage → Product + ProductVariant
 ProductImage.belongsTo(Product, { foreignKey: 'product_id' });
@@ -120,9 +148,10 @@ User.hasMany(Notification, { as: 'notifications', foreignKey: 'user_id' });
 
 module.exports = {
   sequelize,
-  User, Admin, Role, Permission, RolePermission, AdminRole, RefreshToken,
+  User, Admin, Role, Permission, RolePermission, AdminRole, RefreshToken, OTP, LoginHistory,
   Category, Brand, Product, ProductVariant, ProductImage, ProductReview, B2BPricing,
-  Cart, CartItem, Wishlist, Address, Coupon,
+  Cart, CartItem, Wishlist, Address, Coupon, StockIn,
   Order, OrderItem, Payment, Shipment, Invoice,
-  Notification, ActivityLog,
+  Notification, ActivityLog, HeroSlide, AboutPage, OffersHero, Blog, ContactPage, ContactSubmission, NewsletterSubscriber,
+  ChatbotFaq, ChatbotLog, Testimonial,
 };

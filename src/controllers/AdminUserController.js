@@ -1,6 +1,8 @@
 const { Op } = require('sequelize');
 const { Admin, Role } = require('../models');
 const { getPagination, getPaginationMeta } = require('../utils/pagination');
+const ActivityLogService = require('../services/ActivityLogService');
+const { ACTIVITY_MODULES, ACTIVITY_ACTIONS } = require('../constants');
 const R = require('../utils/response');
 
 const serializeAdmin = (admin, roles) => ({
@@ -59,6 +61,13 @@ exports.create = async (req, res) => {
   });
   await admin.setRoles([role]);
 
+  ActivityLogService.log({
+    req, module: ACTIVITY_MODULES.ADMINS, action: ACTIVITY_ACTIONS.ADMIN_CREATED,
+    description: `${req.admin.name} created admin "${admin.name}" (${admin.email}) with role ${role.name}`,
+    recordId: admin.id,
+    newValues: { name: admin.name, email: admin.email, phone: admin.phone, role: role.slug },
+  });
+
   return R.created(res, 'Admin created', serializeAdmin(admin, [role]));
 };
 
@@ -68,10 +77,12 @@ exports.update = async (req, res) => {
 
   const { name, phone, role: roleSlug } = req.body;
   const updates = {};
+  const oldValues = { name: admin.name, phone: admin.phone };
   if (name) updates.name = name;
   if (phone !== undefined) updates.phone = phone || null;
 
   let role = null;
+  const previousRole = admin.is_super_admin ? 'super_admin' : null;
   if (roleSlug) {
     if (admin.id === req.admin.id && roleSlug !== 'super_admin') {
       return R.error(res, 'You cannot change your own role');
@@ -88,6 +99,19 @@ exports.update = async (req, res) => {
 
   await admin.update(updates);
   if (role) await admin.setRoles([role]);
+
+  ActivityLogService.log({
+    req, module: ACTIVITY_MODULES.ADMINS, action: ACTIVITY_ACTIONS.ADMIN_UPDATED,
+    description: `${req.admin.name} updated admin "${admin.name}"`,
+    recordId: admin.id, oldValues, newValues: updates,
+  });
+  if (role && roleSlug !== previousRole) {
+    ActivityLogService.log({
+      req, module: ACTIVITY_MODULES.ADMINS, action: ACTIVITY_ACTIONS.ROLE_CHANGED,
+      description: `${req.admin.name} changed ${admin.name}'s role to ${role.name}`,
+      recordId: admin.id, oldValues: { role: previousRole }, newValues: { role: roleSlug },
+    });
+  }
 
   return R.success(res, 'Admin updated', serializeAdmin(admin, await admin.getRoles()));
 };
@@ -107,7 +131,15 @@ exports.updateStatus = async (req, res) => {
     if (superAdminCount <= 1) return R.error(res, 'Cannot deactivate the last super admin');
   }
 
+  const oldStatus = admin.status;
   await admin.update({ status });
+
+  ActivityLogService.log({
+    req, module: ACTIVITY_MODULES.ADMINS, action: ACTIVITY_ACTIONS.ADMIN_STATUS_CHANGED,
+    description: `${req.admin.name} changed ${admin.name}'s status from ${oldStatus} to ${status}`,
+    recordId: admin.id, oldValues: { status: oldStatus }, newValues: { status },
+  });
+
   return R.success(res, 'Admin status updated', serializeAdmin(admin, await admin.getRoles()));
 };
 
@@ -116,6 +148,13 @@ exports.resetPassword = async (req, res) => {
   if (!admin) return R.notFound(res, 'Admin not found');
 
   await admin.update({ password: req.body.newPassword });
+
+  ActivityLogService.log({
+    req, module: ACTIVITY_MODULES.ADMINS, action: ACTIVITY_ACTIONS.PASSWORD_RESET,
+    description: `${req.admin.name} reset the password for ${admin.name}`,
+    recordId: admin.id,
+  });
+
   return R.success(res, 'Password reset successfully');
 };
 

@@ -32,13 +32,21 @@ class RazorpayService {
   }
 
   async capturePayment({ razorpayOrderId, razorpayPaymentId, razorpaySignature }) {
-    const isValid = this.verifySignature(razorpayOrderId, razorpayPaymentId, razorpaySignature);
-    if (!isValid) throw new Error('Payment verification failed');
-
-    const rzpPayment = await this.instance.payments.fetch(razorpayPaymentId);
-
     const payment = await Payment.findOne({ where: { razorpay_order_id: razorpayOrderId } });
     if (!payment) throw new Error('Payment record not found');
+
+    // Previously a failed signature check just threw here with no DB write
+    // at all — the Payment row stayed 'pending' forever and there was no
+    // record a failure ever happened. Persisting 'failed' gives admins an
+    // actual audit trail and is what the Payment model's afterUpdate hook
+    // needs to fire the "Payment Failed" notification.
+    const isValid = this.verifySignature(razorpayOrderId, razorpayPaymentId, razorpaySignature);
+    if (!isValid) {
+      await payment.update({ razorpay_payment_id: razorpayPaymentId, status: 'failed' });
+      throw new Error('Payment verification failed');
+    }
+
+    const rzpPayment = await this.instance.payments.fetch(razorpayPaymentId);
 
     await payment.update({
       razorpay_payment_id: razorpayPaymentId,

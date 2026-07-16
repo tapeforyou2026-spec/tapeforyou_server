@@ -1,5 +1,7 @@
 const { Category } = require('../models');
 const { generateUniqueSlug } = require('../utils/slug');
+const ActivityLogService = require('../services/ActivityLogService');
+const { ACTIVITY_MODULES, ACTIVITY_ACTIONS } = require('../constants');
 const R = require('../utils/response');
 
 exports.list = async (req, res) => {
@@ -23,6 +25,13 @@ exports.create = async (req, res) => {
   const image = req.file ? `/uploads/categories/${req.file.filename}` : (image_url || null);
 
   const cat = await Category.create({ name, slug, description, parent_id: parent_id || null, sort_order: sort_order || 0, status: status || 'active', image, seo_title, seo_description, seo_keywords });
+
+  ActivityLogService.log({
+    req, module: ACTIVITY_MODULES.CATEGORIES, action: ACTIVITY_ACTIONS.CATEGORY_CREATED,
+    description: `${req.admin.name} created category "${cat.name}"`,
+    recordId: cat.id, newValues: { name: cat.name, parent_id: cat.parent_id, status: cat.status },
+  });
+
   return R.created(res, 'Category created', cat);
 };
 
@@ -39,13 +48,32 @@ exports.update = async (req, res) => {
     updates.slug = await generateUniqueSlug(updates.name, Category, 'slug', cat.id);
   }
 
+  const oldValues = {};
+  Object.keys(updates).forEach((k) => { oldValues[k] = cat[k]; });
+
   await cat.update(updates);
+
+  ActivityLogService.log({
+    req, module: ACTIVITY_MODULES.CATEGORIES, action: ACTIVITY_ACTIONS.CATEGORY_UPDATED,
+    description: `${req.admin.name} updated category "${cat.name}"`,
+    recordId: cat.id, oldValues, newValues: updates,
+  });
+
   return R.success(res, 'Category updated', cat);
 };
 
 exports.delete = async (req, res) => {
   const cat = await Category.findByPk(req.params.id);
   if (!cat) return R.notFound(res);
+
+  const snapshot = cat.toJSON();
   await cat.destroy();
+
+  ActivityLogService.log({
+    req, module: ACTIVITY_MODULES.CATEGORIES, action: ACTIVITY_ACTIONS.CATEGORY_DELETED,
+    description: `${req.admin.name} deleted category "${snapshot.name}"`,
+    recordId: snapshot.id, snapshot,
+  });
+
   return R.success(res, 'Category deleted');
 };

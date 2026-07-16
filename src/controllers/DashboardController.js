@@ -11,8 +11,10 @@ exports.stats = async (req, res) => {
       COUNT(CASE WHEN status = 'shipped' THEN 1 END) AS shipped_orders,
       COUNT(CASE WHEN status = 'delivered' THEN 1 END) AS delivered_orders,
       COUNT(CASE WHEN status = 'cancelled' THEN 1 END) AS cancelled_orders,
+      COUNT(CASE WHEN status = 'returned' THEN 1 END) AS returned_orders,
       COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN total ELSE 0 END), 0) AS total_revenue,
       COALESCE(SUM(CASE WHEN DATE(created_at) = CURRENT_DATE AND payment_status = 'paid' THEN total ELSE 0 END), 0) AS today_revenue,
+      COALESCE(SUM(CASE WHEN DATE_TRUNC('week', created_at) = DATE_TRUNC('week', NOW()) AND payment_status = 'paid' THEN total ELSE 0 END), 0) AS week_revenue,
       COALESCE(SUM(CASE WHEN DATE_TRUNC('month', created_at) = DATE_TRUNC('month', NOW()) AND payment_status = 'paid' THEN total ELSE 0 END), 0) AS month_revenue
     FROM orders
   `);

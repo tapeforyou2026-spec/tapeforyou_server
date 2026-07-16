@@ -15,6 +15,7 @@ module.exports = (sequelize, DataTypes) => sequelize.define('Product', {
   is_featured: { type: DataTypes.BOOLEAN, defaultValue: false },
   avg_rating: { type: DataTypes.DECIMAL(3, 2), defaultValue: 0 },
   review_count: { type: DataTypes.INTEGER, defaultValue: 0 },
+  view_count: { type: DataTypes.INTEGER, defaultValue: 0 },
   seo_title: { type: DataTypes.STRING(200), allowNull: true },
   seo_description: { type: DataTypes.TEXT, allowNull: true },
   seo_tags: { type: DataTypes.STRING(500), allowNull: true },

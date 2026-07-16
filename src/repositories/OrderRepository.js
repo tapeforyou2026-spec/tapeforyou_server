@@ -21,6 +21,26 @@ class OrderRepository extends BaseRepository {
     });
   }
 
+  // Used by the admin orders list — the generic BaseRepository.findAndCountAll
+  // has no includes, so this previously returned bare Order rows with no
+  // customer or item data at all (the admin list's "Items" column silently
+  // showed "0 item(s)" for every order as a result, since `items` was never
+  // actually included).
+  async adminList(where, { limit, offset }) {
+    return Order.findAndCountAll({
+      where,
+      include: [
+        { model: User, attributes: ['id', 'name', 'email'] },
+        { model: OrderItem, as: 'items' },
+        { model: Shipment, as: 'shipment' },
+      ],
+      distinct: true,
+      limit,
+      offset,
+      order: [['created_at', 'DESC']],
+    });
+  }
+
   async findByOrderNumber(orderNumber) {
     return Order.findOne({
       where: { order_number: orderNumber },

@@ -5,12 +5,13 @@ const OrderRepository = require('../repositories/OrderRepository');
 const ProductRepository = require('../repositories/ProductRepository');
 const EmailService = require('./EmailService');
 const InvoiceService = require('./InvoiceService');
+const NotificationService = require('./NotificationService');
 
 const FREE_SHIPPING_THRESHOLD = 499;
 const SHIPPING_CHARGE = 60;
 
 class OrderService {
-  async createOrder({ userId, addressId, cartId, couponCode, paymentMethod, notes }) {
+  async createOrder({ userId, addressId, cartId, couponCode, paymentMethod, notes, trafficSource }) {
     const t = await sequelize.transaction();
     try {
       const cartItems = await CartItem.findAll({
@@ -80,13 +81,32 @@ class OrderService {
         notes,
         status: 'pending',
         payment_status: paymentMethod === 'cod' ? 'pending' : 'pending',
+        traffic_source: trafficSource || null,
       }, { transaction: t });
 
       const orderItems = items.map(i => ({ ...i, order_id: order.id }));
       await OrderItem.bulkCreate(orderItems, { transaction: t });
 
+      // Static `.decrement()` issues a raw UPDATE and bypasses instance hooks
+      // entirely (unlike instance `.update()`, which is how Order/Payment's
+      // notification hooks fire), so low-stock detection can't live on the
+      // ProductVariant model itself — checked here instead, using the
+      // already-loaded `variant.stock_qty` (the pre-decrement value) rather
+      // than an extra query.
       for (const item of cartItems) {
         await ProductVariant.decrement('stock_qty', { by: item.quantity, where: { id: item.variant_id }, transaction: t });
+
+        const variant = item.variant;
+        const alert = variant.low_stock_alert || 10;
+        const newQty = variant.stock_qty - item.quantity;
+        if (newQty <= alert && variant.stock_qty > alert) {
+          NotificationService.notifyAdmins({
+            type: 'low_stock',
+            title: newQty <= 0 ? 'Out of Stock' : 'Low Stock Alert',
+            body: `${variant.sku} ${newQty <= 0 ? 'is now out of stock' : `has only ${newQty} units left`}`,
+            data: { variant_id: variant.id },
+          });
+        }
       }
 
       await CartItem.destroy({ where: { cart_id: cartId }, transaction: t });
@@ -119,6 +139,7 @@ class OrderService {
         }
       }
       await t.commit();
+      return order;
     } catch (err) {
       await t.rollback();
       throw err;

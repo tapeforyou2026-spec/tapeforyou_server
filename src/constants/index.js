@@ -82,6 +82,68 @@ const REVIEW_STATUS = {
   REJECTED: 'rejected',
 };
 
+const OTP_PURPOSE = {
+  VERIFY_MOBILE: 'verify_mobile',
+  RESET_PASSWORD: 'reset_password',
+};
+
+const STOCK_IN_STATUS = {
+  ORDERED: 'ordered',
+  RECEIVED: 'received',
+  CANCELLED: 'cancelled',
+};
+
+// Activity Logs / Audit Trail. Only modules with real CRUD in this codebase
+// today are listed — Banners and Website Settings were explicitly deferred
+// (no such features exist yet to log).
+const ACTIVITY_MODULES = {
+  AUTH: 'auth',
+  PRODUCTS: 'products',
+  CATEGORIES: 'categories',
+  ORDERS: 'orders',
+  COUPONS: 'coupons',
+  ADMINS: 'admins',
+};
+
+const ACTIVITY_ACTIONS = {
+  LOGIN: 'Login',
+  LOGOUT: 'Logout',
+  FAILED_LOGIN: 'Failed Login',
+  PASSWORD_CHANGED: 'Password Changed',
+  PASSWORD_RESET: 'Password Reset',
+
+  PRODUCT_CREATED: 'Product Created',
+  PRODUCT_UPDATED: 'Product Updated',
+  PRODUCT_DELETED: 'Product Deleted',
+  PRODUCT_PUBLISHED: 'Product Published',
+  PRODUCT_HIDDEN: 'Product Hidden',
+  PRODUCT_STOCK_UPDATED: 'Product Stock Updated',
+  PRODUCT_PRICE_UPDATED: 'Product Price Updated',
+
+  CATEGORY_CREATED: 'Category Created',
+  CATEGORY_UPDATED: 'Category Updated',
+  CATEGORY_DELETED: 'Category Deleted',
+
+  ORDER_CREATED: 'Order Created',
+  ORDER_UPDATED: 'Order Updated',
+  ORDER_STATUS_CHANGED: 'Order Status Changed',
+  ORDER_CANCELLED: 'Order Cancelled',
+  ORDER_REFUNDED: 'Order Refunded',
+  ORDER_SHIPPED: 'Order Shipped',
+  ORDER_DELIVERED: 'Order Delivered',
+  ORDER_PAYMENT_RECEIVED: 'Order Payment Received',
+
+  COUPON_CREATED: 'Coupon Created',
+  COUPON_UPDATED: 'Coupon Updated',
+  COUPON_DELETED: 'Coupon Deleted',
+
+  ADMIN_CREATED: 'Admin Created',
+  ADMIN_UPDATED: 'Admin Updated',
+  ADMIN_DELETED: 'Admin Deleted',
+  ADMIN_STATUS_CHANGED: 'Admin Status Changed',
+  ROLE_CHANGED: 'Role Changed',
+};
+
 const GST_HSN = {
   BOPP: { hsn: '39191000', gst: 18 },
   PVC_ELECTRICAL: { hsn: '85469090', gst: 18 },
@@ -103,5 +165,6 @@ const INDIA_STATES = [
 module.exports = {
   ROLES, USER_STATUS, PRODUCT_STATUS, ORDER_STATUS, PAYMENT_STATUS,
   PAYMENT_METHOD, SHIPMENT_STATUS, COUPON_TYPE, NOTIFICATION_TYPE,
-  ADDRESS_TYPE, REVIEW_STATUS, GST_HSN, INDIA_STATES,
+  ADDRESS_TYPE, REVIEW_STATUS, GST_HSN, INDIA_STATES, OTP_PURPOSE, STOCK_IN_STATUS,
+  ACTIVITY_MODULES, ACTIVITY_ACTIONS,
 };

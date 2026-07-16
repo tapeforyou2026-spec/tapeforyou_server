@@ -24,4 +24,51 @@ module.exports = (sequelize, DataTypes) => sequelize.define('Order', {
   cancel_reason: { type: DataTypes.STRING(500), allowNull: true },
   delivered_at: { type: DataTypes.DATE, allowNull: true },
   is_b2b: { type: DataTypes.BOOLEAN, defaultValue: false },
-}, { tableName: 'orders', timestamps: true, underscored: true });
+  // First-touch attribution captured client-side at checkout (see the
+  // customer frontend's TrafficSourceTracker) — null for any order placed
+  // before this column existed, or where the frontend didn't send one.
+  traffic_source: { type: DataTypes.ENUM('direct', 'organic', 'social', 'referral', 'paid', 'email', 'other'), allowNull: true },
+}, {
+  tableName: 'orders',
+  timestamps: true,
+  underscored: true,
+  hooks: {
+    // Fires for every order regardless of which controller/service created
+    // it — NotificationService is required lazily inside the hook (not at
+    // module top-level) since models/index.js is still mid-initialization
+    // when this file first loads, and NotificationService itself pulls in
+    // `../models`.
+    afterCreate: async (order) => {
+      const NotificationService = require('../services/NotificationService');
+      await NotificationService.notifyAdmins({
+        type: 'order',
+        title: 'New Order Received',
+        body: `Order #${order.order_number} placed for ₹${order.total}`,
+        data: { order_id: order.id },
+      });
+    },
+    // Static `Order.update(...)` calls bypass instance hooks in Sequelize —
+    // this only fires for `order.update(...)` on an instance, which is how
+    // every status change in this codebase is actually done
+    // (OrderService.cancelOrder, OrderController.adminUpdateStatus).
+    afterUpdate: async (order) => {
+      if (!order.changed('status')) return;
+      const NotificationService = require('../services/NotificationService');
+      if (order.status === 'cancelled') {
+        await NotificationService.notifyAdmins({
+          type: 'order',
+          title: 'Order Cancelled',
+          body: `Order #${order.order_number} was cancelled${order.cancel_reason ? `: ${order.cancel_reason}` : ''}`,
+          data: { order_id: order.id },
+        });
+      } else if (order.status === 'returned') {
+        await NotificationService.notifyAdmins({
+          type: 'return',
+          title: 'Return Request',
+          body: `Order #${order.order_number} has been marked as returned`,
+          data: { order_id: order.id },
+        });
+      }
+    },
+  },
+});

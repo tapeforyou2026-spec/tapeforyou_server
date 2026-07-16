@@ -5,6 +5,10 @@ exports.createOrder = Joi.object({
   couponCode: Joi.string().uppercase().optional().allow('', null),
   paymentMethod: Joi.string().valid('razorpay', 'cod', 'upi').required(),
   notes: Joi.string().max(500).optional().allow('', null),
+  // Optional — the `validate` middleware uses `stripUnknown: true`, so this
+  // field silently dropping out of every order was the original bug were
+  // it not listed here explicitly.
+  trafficSource: Joi.string().valid('direct', 'organic', 'social', 'referral', 'paid', 'email', 'other').optional().allow(null),
 });
 
 exports.addToCart = Joi.object({
