@@ -60,7 +60,7 @@ const env = {
   URLS: {
     BASE: process.env.BASE_URL || 'http://localhost:5000',
     FRONTEND: process.env.FRONTEND_URL || 'http://localhost:3000',
-    ADMIN: process.env.ADMIN_URL || 'http://localhost:5173,https://tapeforyou-admin.vercel.app',
+    ADMIN: process.env.ADMIN_URL || 'http://localhost:5174,https://tapeforyou-admin.vercel.app',
   },
 
   GST_PERCENT: parseFloat(process.env.GST_PERCENT) || 18,
