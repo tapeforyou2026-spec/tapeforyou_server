@@ -9,7 +9,9 @@ class InvoiceService {
   async generateForOrder(order) {
     const invoiceNumber = generateInvoiceNumber();
     const invoiceDate = new Date().toISOString().split('T')[0];
-    const filePath = path.join(process.cwd(), 'src/uploads/invoices', `${invoiceNumber}.pdf`);
+    const invoicesDir = path.join(process.cwd(), 'src/uploads/invoices');
+    fs.mkdirSync(invoicesDir, { recursive: true });
+    const filePath = path.join(invoicesDir, `${invoiceNumber}.pdf`);
 
     const subtotal = parseFloat(order.subtotal);
     const gstAmount = parseFloat(order.gst_amount);
