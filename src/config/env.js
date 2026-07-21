@@ -36,6 +36,15 @@ const env = {
     PASSWORD: process.env.SHIPROCKET_PASSWORD,
   },
 
+  // Bigship Direct — replaces Shiprocket as the active courier integration.
+  // See src/services/bigship/claude.md for the full integration guide.
+  BIGSHIP: {
+    EMAIL: process.env.BIGSHIP_EMAIL,
+    PASSWORD: process.env.BIGSHIP_PASSWORD,
+    ACCESS_KEY: process.env.BIGSHIP_ACCESS_KEY,
+    WAREHOUSE_ID: process.env.BIGSHIP_WAREHOUSE_ID || null,
+  },
+
   // smsjust.com — no live credentials yet, SmsService runs in demo mode
   // (logs the OTP instead of sending) until these are set. See SmsService.js.
   SMSJUST: {

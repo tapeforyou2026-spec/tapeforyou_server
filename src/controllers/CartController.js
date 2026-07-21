@@ -6,8 +6,23 @@ const getOrCreateCart = async (userId, sessionId) => {
     const [cart] = await Cart.findOrCreate({ where: { user_id: userId }, defaults: { user_id: userId } });
     return cart;
   }
-  const [cart] = await Cart.findOrCreate({ where: { session_id: sessionId }, defaults: { session_id: sessionId } });
-  return cart;
+  if (sessionId) {
+    const [cart] = await Cart.findOrCreate({ where: { session_id: sessionId }, defaults: { session_id: sessionId } });
+    return cart;
+  }
+  // Reached with neither: `optionalAuth` silently falls back to "anonymous"
+  // whenever a Bearer token fails verification (expired/invalid), rather than
+  // rejecting the request — but no guest session-id mechanism is wired up yet
+  // (see server/server/CLAUDE.md's "Known gap" under Auth Mechanism), so
+  // treating this as a real guest previously crashed with a raw Sequelize
+  // "invalid undefined value" error. In practice this only happens when a
+  // stale token was sent (the frontend's useCart.js never calls these routes
+  // for a true logged-out guest) — surfacing a real 401 lets the existing
+  // refresh-and-retry interceptor (src/lib/http.js) get a fresh token and
+  // retry automatically, instead of a confusing "Internal server error".
+  const err = new Error('Your session has expired — please try again');
+  err.statusCode = 401;
+  throw err;
 };
 
 exports.getCart = async (req, res) => {

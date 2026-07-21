@@ -27,7 +27,15 @@ router.get('/orders/:id/shipping-label', orderCtrl.adminShippingLabel);
 router.post('/orders/:id/shipping-label', orderCtrl.adminGenerateShippingLabel);
 router.put('/orders/:id/status', orderCtrl.adminUpdateStatus);
 router.put('/orders/:id/mark-paid', orderCtrl.markPaid);
+router.get('/orders/:id/shipping-rates', orderCtrl.adminShippingRates);
 router.post('/orders/:id/ship', orderCtrl.shipOrder);
+router.post('/orders/:id/cancel-shipment', orderCtrl.cancelShipment);
+
+// Bigship — one-time pickup warehouse registration (see services/bigship/claude.md)
+const bigshipCtrl = require('../controllers/BigshipController');
+router.post('/bigship/warehouse', bigshipCtrl.registerWarehouse);
+router.get('/bigship/warehouse', bigshipCtrl.getWarehouse);
+router.get('/bigship/profile', bigshipCtrl.getProfile);
 
 // Invoices
 const invoiceCtrl = require('../controllers/InvoiceController');

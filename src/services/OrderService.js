@@ -6,9 +6,7 @@ const ProductRepository = require('../repositories/ProductRepository');
 const EmailService = require('./EmailService');
 const InvoiceService = require('./InvoiceService');
 const NotificationService = require('./NotificationService');
-
-const FREE_SHIPPING_THRESHOLD = 499;
-const SHIPPING_CHARGE = 60;
+const ShippingService = require('./ShippingService');
 
 class OrderService {
   async createOrder({ userId, addressId, cartId, couponCode, paymentMethod, notes, trafficSource }) {
@@ -31,7 +29,10 @@ class OrderService {
         if (variant.stock_qty < item.quantity) throw new Error(`Insufficient stock for ${variant.sku}`);
 
         const lineTotal = parseFloat(variant.selling_price) * item.quantity;
-        const gstAmount = parseFloat(((lineTotal * variant.gst_percent || 18) / 100).toFixed(2));
+        // Parenthesized explicitly — `lineTotal * variant.gst_percent || 18` previously
+        // parsed as `(lineTotal * variant.gst_percent) || 18` (operator precedence),
+        // which would silently charge 18% GST even on a genuinely 0%-GST product.
+        const gstAmount = parseFloat(((lineTotal * (variant.gst_percent || 18)) / 100).toFixed(2));
 
         subtotal += lineTotal;
         items.push({
@@ -63,9 +64,48 @@ class OrderService {
         }
       }
 
-      const shippingCharge = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_CHARGE;
-      const gstAmount = items.reduce((s, i) => s + parseFloat(i.gst_amount), 0);
-      const total = parseFloat((subtotal - couponDiscount + shippingCharge).toFixed(2));
+      // Real, distance-based shipping via Bigship (falls back to a flat fee if
+      // the live rate call fails) — same ShippingService.calculateShipping()
+      // the pre-checkout "Check Delivery Availability" widget calls, so the
+      // quote shown to the customer always matches what gets charged here.
+      const address = await Address.findByPk(addressId, { transaction: t });
+      if (!address) throw new Error('Delivery address not found');
+      const totalQuantity = cartItems.reduce((s, i) => s + i.quantity, 0);
+      const shippingResult = await ShippingService.calculateShipping({
+        destPincode: address.pincode,
+        destCity: address.city,
+        subtotal,
+        totalQuantity,
+        isCod: paymentMethod === 'cod',
+      });
+      // A real "no courier serves this pincode" answer from Bigship — block
+      // the order rather than silently charging a flat fallback fee for a
+      // shipment that genuinely cannot go out (distinct from a Bigship API
+      // outage, which ShippingService already treats as serviceable:true
+      // with a fallback charge). statusCode is set explicitly — errorHandler.js
+      // masks any error without one to a generic 500 "Internal server error",
+      // which would hide the real, actionable reason from the customer.
+      if (!shippingResult.serviceable) {
+        const err = new Error(shippingResult.message || 'Delivery is not available to this address');
+        err.statusCode = 400;
+        throw err;
+      }
+      const { shippingCharge } = shippingResult;
+
+      // Taxable Amount = Product Amount + Shipping Charges; GST = Taxable × 18%
+      // (confirmed business rule — shipping is part of the taxable supply,
+      // matching how Bigship itself bills freight+GST as a composite charge).
+      // Per-item gst_amount (above) already covers the product portion at
+      // each item's own gst_percent; shippingGst is a flat 18% add-on since
+      // shipping has no per-SKU rate of its own.
+      const itemsGstAmount = items.reduce((s, i) => s + parseFloat(i.gst_amount), 0);
+      const shippingGstAmount = parseFloat(((shippingCharge * 18) / 100).toFixed(2));
+      const gstAmount = parseFloat((itemsGstAmount + shippingGstAmount).toFixed(2));
+      // GST is now actually added to what the customer is charged — previously
+      // gst_amount was computed and stored (for the invoice breakdown) but never
+      // included here, meaning the invoice showed CGST/SGST rows that didn't
+      // actually add up to the printed TOTAL.
+      const total = parseFloat((subtotal - couponDiscount + shippingCharge + gstAmount).toFixed(2));
 
       const order = await Order.create({
         order_number: generateOrderNumber(),

@@ -2,7 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const OrderService = require('../services/OrderService');
 const RazorpayService = require('../services/RazorpayService');
-const ShiprocketService = require('../services/ShiprocketService');
+// ShiprocketService is no longer called — kept in the repo for historical
+// shipments' reference only. See services/bigship/claude.md for why.
+const BigshipService = require('../services/bigship/BigshipService');
 const OrderRepository = require('../repositories/OrderRepository');
 const PackingSlipService = require('../services/PackingSlipService');
 const CreditNoteService = require('../services/CreditNoteService');
@@ -145,17 +147,15 @@ exports.adminShippingLabel = async (req, res) => {
   return R.success(res, 'Shipping label', { label_url: order.shipment.label_url });
 };
 
-// Shiprocket's generateLabel() call already existed as a bare API wrapper
-// but nothing ever invoked it or saved the returned URL — Shipment.label_url
-// has been sitting unused on the model since it was added.
 exports.adminGenerateShippingLabel = async (req, res) => {
   const order = await OrderRepository.findWithDetails(req.params.id);
   if (!order) return R.notFound(res, 'Order not found');
   if (!order.shipment) return R.error(res, 'Create a shipment for this order first');
+  if (!order.shipment.bigship_custom_order_id) return R.error(res, 'This shipment was booked before the Bigship migration — no label available through this action');
 
-  const result = await ShiprocketService.generateLabel(order.shipment.shiprocket_shipment_id);
-  const labelUrl = result?.label_created ? result.label_url : null;
-  if (!labelUrl) return R.error(res, 'Shiprocket did not return a label URL');
+  const result = await BigshipService.downloadShipmentDocuments(order.shipment.bigship_custom_order_id, 'label');
+  const labelUrl = result.data?.AttachmentData;
+  if (!labelUrl) return R.error(res, 'Bigship did not return a label URL');
 
   await order.shipment.update({ label_url: labelUrl });
   return R.success(res, 'Shipping label generated', { label_url: labelUrl });
@@ -215,18 +215,56 @@ exports.markPaid = async (req, res) => {
   return R.success(res, 'Payment marked as received', await OrderRepository.findWithDetails(order.id));
 };
 
+// Step 1 of the admin "Create Shipment" flow — creates a Bigship draft order
+// and returns its serviceable couriers so the admin can pick one. See
+// services/bigship/claude.md "Order Flow" for why this is a two-step process.
+exports.adminShippingRates = async (req, res) => {
+  const order = await OrderRepository.findWithDetails(req.params.id);
+  if (!order) return R.notFound(res, 'Order not found');
+  if (order.shipment) return R.error(res, 'This order already has a shipment');
+
+  const options = await BigshipService.getShippingOptions(order);
+  return R.success(res, 'Shipping rates fetched', options);
+};
+
+// Step 2 — books the shipment against the draft created in step 1.
 exports.shipOrder = async (req, res) => {
   const order = await OrderRepository.findWithDetails(req.params.id);
   if (!order) return R.notFound(res, 'Order not found');
 
-  const shipment = await ShiprocketService.createShipment(order);
+  const { masterCustomOrderId, courierId, courierName, riskTypeId } = req.body;
+  if (!masterCustomOrderId || !courierId) return R.error(res, 'masterCustomOrderId and courierId are required — fetch shipping rates first');
+
+  const shipment = await BigshipService.bookShipment(order, { masterCustomOrderId, courierId, courierName, riskTypeId });
   await order.update({ status: 'shipped' });
 
   ActivityLogService.log({
     req, module: ACTIVITY_MODULES.ORDERS, action: ACTIVITY_ACTIONS.ORDER_SHIPPED,
-    description: `${req.admin.name} created a shipment for order #${order.order_number}`,
+    description: `${req.admin.name} created a shipment for order #${order.order_number} via ${courierName || 'Bigship'}`,
     recordId: order.id, newValues: { status: 'shipped' },
   });
 
   return R.success(res, 'Shipment created', shipment);
+};
+
+// Only valid before Bigship's "Rider-Assigned" status — Bigship itself
+// enforces this and returns an error we surface as-is, not something this
+// codebase pre-validates against (see claude.md "Cancel Shipment").
+exports.cancelShipment = async (req, res) => {
+  const order = await OrderRepository.findWithDetails(req.params.id);
+  if (!order) return R.notFound(res, 'Order not found');
+  if (!order.shipment) return R.error(res, 'This order has no shipment to cancel');
+  if (!order.shipment.bigship_custom_order_id) return R.error(res, 'This shipment predates the Bigship migration — cancel it directly in Shiprocket instead');
+
+  await BigshipService.cancelOrder(order.shipment.bigship_custom_order_id);
+  await order.shipment.update({ status: 'failed' });
+  await order.update({ status: 'confirmed' });
+
+  ActivityLogService.log({
+    req, module: ACTIVITY_MODULES.ORDERS, action: ACTIVITY_ACTIONS.ORDER_STATUS_CHANGED,
+    description: `${req.admin.name} cancelled the Bigship shipment for order #${order.order_number}`,
+    recordId: order.id, newValues: { status: 'confirmed' },
+  });
+
+  return R.success(res, 'Shipment cancelled');
 };
