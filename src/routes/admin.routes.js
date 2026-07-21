@@ -159,6 +159,7 @@ router.get('/reports/products', reportsCtrl.productReport);
 router.get('/reports/courier', reportsCtrl.courierReport);
 router.get('/reports/refunds', reportsCtrl.refundReport);
 router.get('/reports/:type/pdf', reportsCtrl.downloadReportPdf);
+router.get('/reports/:type/excel', reportsCtrl.downloadReportExcel);
 
 // Staff / Admin management (Super Admin only)
 const adminUserCtrl = require('../controllers/AdminUserController');

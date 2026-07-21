@@ -1,3 +1,4 @@
+const ExcelJS = require('exceljs');
 const { sequelize } = require('../models');
 const R = require('../utils/response');
 const ReportPdfService = require('../services/ReportPdfService');
@@ -315,4 +316,36 @@ exports.downloadReportPdf = async (req, res) => {
     'Content-Disposition': `attachment; filename="${cfg.title.replace(/\s+/g, '-')}.pdf"`,
   });
   return res.send(buffer);
+};
+
+// Excel export — reuses the exact same `fetch`/`columns` as the PDF above
+// (same REPORTS registry), so this can never show different numbers than
+// what's on-screen or in the PDF. Opens directly in Excel; same underlying
+// library (exceljs) this project already uses for the newsletter-subscribers
+// export (NewsletterController.adminExport) — same pattern, not a new one.
+exports.downloadReportExcel = async (req, res) => {
+  const cfg = REPORTS[req.params.type];
+  if (!cfg) return R.notFound(res, 'Unknown report type');
+
+  const rows = await cfg.fetch(req.query);
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet(cfg.title.slice(0, 31)); // Excel sheet-name limit
+  sheet.columns = cfg.columns.map((c) => ({ header: c.label, key: c.key, width: Math.max(12, Math.round((c.width || 100) / 7)) }));
+  sheet.getRow(1).font = { bold: true };
+
+  rows.forEach((row) => {
+    const values = {};
+    cfg.columns.forEach((c) => {
+      values[c.key] = c.format ? c.format(row[c.key], row) : row[c.key];
+    });
+    sheet.addRow(values);
+  });
+
+  res.set({
+    'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'Content-Disposition': `attachment; filename="${cfg.title.replace(/\s+/g, '-')}.xlsx"`,
+  });
+  await workbook.xlsx.write(res);
+  res.end();
 };
