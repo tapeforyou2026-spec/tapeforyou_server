@@ -203,6 +203,17 @@ exports.sendOtp = async (req, res) => {
     return R.success(res, 'If that mobile number is registered, an OTP has been sent');
   }
 
+  if (purpose === OTP_PURPOSE.LOGIN) {
+    // Unlike reset-password, existence isn't sensitive here — a customer
+    // trying to log in needs to be told to register instead if their number
+    // isn't found, same UX every major e-commerce app (Amazon, Flipkart)
+    // already shows for this exact flow.
+    if (!user) return R.notFound(res, 'No account found with that mobile number. Please register first.');
+    if (user.status !== 'active') return R.unauthorized(res, 'Account is inactive or banned');
+    await OtpService.send(user, purpose);
+    return R.success(res, 'OTP sent to your mobile number');
+  }
+
   // verify_mobile always follows registration, so the account existing
   // isn't sensitive the way it is for a password-reset lookup.
   if (!user) return R.notFound(res, 'No account found with that mobile number');
@@ -222,6 +233,30 @@ exports.verifyOtp = async (req, res) => {
   if (purpose === OTP_PURPOSE.VERIFY_MOBILE) {
     await user.update({ mobile_verified: true });
     return R.success(res, 'Mobile number verified successfully');
+  }
+
+  if (purpose === OTP_PURPOSE.LOGIN) {
+    // OTP is just an alternate way to prove identity for login — it must
+    // enforce the exact same gates password login does (active account,
+    // verified email), or it would be a way to bypass those checks entirely.
+    if (user.status !== 'active') {
+      await recordLoginAttempt({ userId: user.id, identifier: phone, req, success: false, failureReason: 'Account inactive or banned' });
+      return R.unauthorized(res, 'Account is inactive or banned');
+    }
+    if (!user.email_verified) {
+      await recordLoginAttempt({ userId: user.id, identifier: phone, req, success: false, failureReason: 'Email not verified' });
+      return R.error(res, 'Please verify your email before logging in', { code: 'EMAIL_NOT_VERIFIED' }, 403);
+    }
+    // A correctly-entered OTP sent to this exact number is itself proof of
+    // mobile ownership — same fact `verify_mobile` records, so this keeps
+    // that flag consistent even for someone who skipped that separate step.
+    if (!user.mobile_verified) await user.update({ mobile_verified: true });
+
+    const { accessToken, refreshToken } = await AuthService.issueTokens(user, req.headers['user-agent'], req.ip);
+    res.cookie('refresh_token', refreshToken, COOKIE_OPTS);
+    setCsrfCookie(res);
+    await recordLoginAttempt({ userId: user.id, identifier: phone, req, success: true });
+    return R.success(res, 'Login successful', { user: user.toPublic(), accessToken });
   }
 
   // purpose === RESET_PASSWORD — OTP is just an alternate way to prove

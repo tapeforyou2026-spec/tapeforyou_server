@@ -45,10 +45,15 @@ const env = {
     WAREHOUSE_ID: process.env.BIGSHIP_WAREHOUSE_ID || null,
   },
 
-  // smsjust.com — no live credentials yet, SmsService runs in demo mode
-  // (logs the OTP instead of sending) until these are set. See SmsService.js.
+  // smsjust.com — real transactional-SMS credentials (set 2026-07-22).
+  // USERNAME/PASSWORD here are the API-specific credentials from the
+  // account's urlsms.php integration, NOT the smsjust.com dashboard
+  // login (which is a separate username/password pair only used to sign
+  // into the web portal, never sent by this app). SmsService runs in demo
+  // mode (logs the OTP instead of sending) only if USERNAME is unset.
   SMSJUST: {
-    API_KEY: process.env.SMSJUST_API_KEY || null,
+    USERNAME: process.env.SMSJUST_USERNAME || null,
+    PASSWORD: process.env.SMSJUST_PASSWORD || null,
     SENDER_ID: process.env.SMSJUST_SENDER_ID || null,
   },
 

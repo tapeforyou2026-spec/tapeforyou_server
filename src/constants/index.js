@@ -85,6 +85,7 @@ const REVIEW_STATUS = {
 const OTP_PURPOSE = {
   VERIFY_MOBILE: 'verify_mobile',
   RESET_PASSWORD: 'reset_password',
+  LOGIN: 'login',
 };
 
 const STOCK_IN_STATUS = {

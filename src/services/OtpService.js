@@ -30,7 +30,7 @@ class OtpService {
       expires_at: new Date(Date.now() + OTP_EXPIRY_MS),
     });
 
-    await SmsService.sendOTP(user.phone, otp, purpose);
+    await SmsService.sendOTP(user.phone, otp, purpose, user.name);
   }
 
   // Returns true/false rather than throwing on a wrong OTP, so the caller
