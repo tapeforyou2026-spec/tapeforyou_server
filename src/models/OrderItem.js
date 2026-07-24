@@ -4,6 +4,7 @@ module.exports = (sequelize, DataTypes) => sequelize.define('OrderItem', {
   variant_id: { type: DataTypes.INTEGER, allowNull: true },
   product_name: { type: DataTypes.STRING(300), allowNull: false },
   sku: { type: DataTypes.STRING(100), allowNull: false },
+  hsn_code: { type: DataTypes.STRING(20), allowNull: true },
   pack_size: { type: DataTypes.STRING(100), allowNull: true },
   color: { type: DataTypes.STRING(50), allowNull: true },
   width: { type: DataTypes.STRING(20), allowNull: true },

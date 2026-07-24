@@ -189,6 +189,18 @@ exports.adminUpdateStatus = async (req, res) => {
     });
   }
 
+  // Auto-book the Bigship shipment the moment an order first reaches
+  // `confirmed` — this is the COD path (prepaid orders reach `confirmed`
+  // automatically via RazorpayService.capturePayment, which calls the same
+  // method). Guarded by `previousStatus !== 'confirmed'` so re-saving an
+  // already-confirmed order (e.g. picking 'confirmed' again from the
+  // dropdown) doesn't attempt a second booking — autoBookShipmentIfNeeded
+  // itself also no-ops if a shipment already exists, so this is redundant-
+  // but-cheap insurance, not the only guard.
+  if (order.status === 'confirmed' && previousStatus !== 'confirmed') {
+    await OrderService.autoBookShipmentIfNeeded(order.id);
+  }
+
   return R.success(res, 'Order status updated', order);
 };
 
@@ -245,6 +257,18 @@ exports.shipOrder = async (req, res) => {
   });
 
   return R.success(res, 'Shipment created', shipment);
+};
+
+// Manual "Refresh Tracking" — pulls the live status from Bigship and writes
+// it back onto the Shipment row. See BigshipService.syncShipmentStatus for
+// why this is defensive about the exact response shape.
+exports.trackShipment = async (req, res) => {
+  const order = await OrderRepository.findWithDetails(req.params.id);
+  if (!order) return R.notFound(res, 'Order not found');
+  if (!order.shipment) return R.error(res, 'This order has no shipment to track yet');
+
+  const shipment = await BigshipService.syncShipmentStatus(order.shipment);
+  return R.success(res, 'Tracking updated', shipment);
 };
 
 // Only valid before Bigship's "Rider-Assigned" status — Bigship itself

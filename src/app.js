@@ -21,7 +21,15 @@ const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // CORS
-const allowedOrigins = [env.URLS.FRONTEND, ...env.URLS.ADMIN.split(',').map((s) => s.trim())];
+// Both FRONTEND_URL and ADMIN_URL support comma-separated multiple origins
+// (e.g. "http://localhost:3000,http://localhost:3001") — FRONTEND_URL was
+// previously used as one raw string here, so setting it to a comma-joined
+// value (matching ADMIN_URL's already-supported format) made every real
+// browser Origin header fail to match, breaking CORS for all frontend ports.
+const allowedOrigins = [
+  ...env.URLS.FRONTEND.split(',').map((s) => s.trim()),
+  ...env.URLS.ADMIN.split(',').map((s) => s.trim()),
+];
 app.use(cors({
   origin: allowedOrigins,
   credentials: true,

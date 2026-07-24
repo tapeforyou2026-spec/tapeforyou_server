@@ -2,6 +2,7 @@ const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const env = require('../config/env');
 const { Payment, Order } = require('../models');
+const OrderService = require('./OrderService');
 
 class RazorpayService {
   constructor() {
@@ -60,6 +61,12 @@ class RazorpayService {
       { payment_status: 'paid', status: 'confirmed' },
       { where: { id: payment.order_id } }
     );
+
+    // Auto-book the Bigship shipment now that the order is confirmed — see
+    // OrderService.autoBookShipmentIfNeeded for why this never throws (a
+    // Bigship failure must not fail payment verification, which is what the
+    // customer's browser is waiting on right now).
+    await OrderService.autoBookShipmentIfNeeded(payment.order_id);
 
     return payment;
   }

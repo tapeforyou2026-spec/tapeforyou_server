@@ -96,13 +96,23 @@ Every subsequent call sends `Authorization: Bearer {token}`.
 
 ## Order Flow
 
-1. Customer places an order normally (`POST /orders`) — completely unchanged, no Bigship involvement at order-creation time.
-2. Admin opens the order detail page and clicks "Create Shipment."
-3. **New step vs. the old Shiprocket flow**: this opens a modal that calls a new endpoint (`GET /admin/orders/:id/shipping-rates`), which runs Bigship's `Create Order` (draft) + `Order Rate Calculation` and returns the list of serviceable couriers with prices. The admin picks one.
-4. Confirming calls `POST /admin/orders/:id/ship` (existing route, updated body: `{ courierId }`) → `BigshipService.placeOrder()` → real booking → `Shipment` row created with `status: 'booked'`, `bigship_custom_order_id`, `bigship_courier_id`/`bigship_courier_name`.
-5. Order status flips to `shipped` — unchanged from today.
+**Superseded 2026-07-24 — see "Automatic Shipment Booking" below for the current behavior.** Kept here for history: originally, an admin had to open the order detail page, click "Create Shipment," and manually pick a courier from a rate-comparison modal (`GET /admin/orders/:id/shipping-rates` → `POST /admin/orders/:id/ship`) before anything was booked with Bigship. That manual flow **still exists and still works** — it's now the fallback path for whenever auto-booking fails (see below) — but is no longer the primary path for a normal order.
 
-This is a real UX change from Shiprocket (which auto-picked a courier with no admin choice) — necessary because Bigship's whole value proposition is rate comparison across couriers, and hiding that would throw away the reason to integrate it.
+## Automatic Shipment Booking (implemented 2026-07-24)
+
+Per an explicit decision with the project owner, shipment creation is now **fully automatic** — no admin click required for the common case. The moment an `Order.status` reaches `confirmed`, `OrderService.autoBookShipmentIfNeeded(orderId)` runs and books a real Bigship shipment immediately, picking the **cheapest serviceable courier** (by the rate list's `total` field) with no human choosing between options. This trades away the courier-comparison UX Bigship's rate-shopping was originally built for, in exchange for zero manual steps — an order shows up in the Bigship merchant panel automatically, without an admin ever opening the order.
+
+**⚠ Practical consequence of this design**: from the moment this shipped, **every order that reaches `confirmed` books a real, billed Bigship shipment automatically** — there is no "review first" step anymore, and no sandbox to test this safely in (see "Why no sandbox..." above). Testing this flow for real (as opposed to just reading the code) means a real order will really get booked with Bigship.
+
+**Two call sites — both places an `Order` can transition into `confirmed`:**
+1. `RazorpayService.capturePayment()` — prepaid (Razorpay) orders reach `confirmed` automatically the instant payment verification succeeds; auto-booking fires right after in the same request.
+2. `OrderController.adminUpdateStatus()` — COD orders have no automatic confirm step (this project has never auto-confirmed COD orders), so an admin moving the status dropdown from `pending`/`processing` to `confirmed` is what triggers it here. Guarded by `previousStatus !== 'confirmed'` so re-selecting the same status doesn't attempt a second booking.
+
+**`BigshipService.autoBookCheapestShipment(order)`** — runs the exact same draft-order + rate-calculation step the admin modal uses (`getShippingOptions`), then picks whichever courier has the lowest `total` and calls `bookShipment()` with it. Reuses 100% of the already-fixed, already-live-tested payload-building code (`buildB2cOrderPayload`'s productName-sanitization, invoice-amount, invoice-number-uniqueness, and `createdAt` fixes all apply here unchanged).
+
+**`OrderService.autoBookShipmentIfNeeded(orderId)`** — the shared entry point both call sites use. **Never throws** — a Bigship failure (no serviceable courier, rate-limit, wallet/account issue) must never break the payment-verification response or the admin's status-update response that triggered it. On failure, the order is simply left in `confirmed` with no shipment (exactly as if auto-booking didn't exist) and an admin notification ("Auto-Booking Failed... Use 'Create Shipment' to book manually") is raised via the existing `NotificationService` — the manual modal is still fully functional as a fallback. On success, sets `Order.status: 'shipped'` (same as the manual flow always did) and raises a "Shipment Auto-Booked" notification. Idempotent: no-ops entirely if the order already has a `Shipment` row.
+
+This is why an order now shows up in **both** this admin panel and the real Bigship merchant panel automatically — placing/confirming an order on the frontend is enough; nothing further needs to happen in this admin panel for the shipment to exist on Bigship's side too.
 
 ## Shipment Flow / Tracking Flow
 
@@ -157,10 +167,41 @@ No sandbox exists, so testing = careful, deliberate real calls:
 2. ✅ Save Warehouse → confirm `warehouseId` returned, set `BIGSHIP_WAREHOUSE_ID`. **Done** — registered the Trambak Road/Pimpalgaon Bahula (422213) warehouse, `warehouseId: 120081`. See "Real Credentials & Warehouse" below for the full story (two undocumented required fields discovered along the way).
 3. ✅ Get Warehouse List → confirm it appears. **Done** — also revealed the account already had a *different*, pre-existing warehouse (id 119959, pincode 422012, Nashik city) that this integration does **not** use; don't confuse the two.
 4. ✅ Rate Calculator (no order created) → confirm pricing looks sane for a real source/destination pincode pair. **Done** — real quotes confirmed: Delhi (110001) ₹136 via Delhivery, Mumbai (400001) ₹94 via Delhivery, both genuine (`usedFallback: false`), plus the free-shipping-zone case (warehouse's own pincode, under ₹899) correctly returns free.
-5. Create Order (draft, `domestic_b2c`) → Order Rate Calculation → confirm at least one courier is serviceable. **Not yet done** — implied working by step 4 (uses the same underlying call), but not independently exercised via the admin "Create Shipment" flow yet since that UI isn't built (see Future Improvements).
-6. **Place Order** (real) → immediately **Cancel Order** → confirms the full booking + cancellation loop without leaving a live shipment. **Not yet done** — needs the admin courier-picker UI, or a direct API call with your explicit go-ahead each time (this is the one step that's a real, billed booking).
-7. Track Order / Order Detail — **not yet done**.
-8. Download Shipment Documents — **not yet done**.
+5. ✅ Create Order (draft, `domestic_b2c`) → Order Rate Calculation → confirm at least one courier is serviceable. **Done 2026-07-23** — exercised for real via the now-built admin "Create Shipment" modal (see "Admin Create Shipment UI" below); surfaced 4 real, undocumented bugs along the way, all fixed (see that section).
+6. **Place Order** (real) → immediately **Cancel Order** — **still not done**. The modal now reaches the "pick a courier and click Book Shipment" point with real data, but the actual booking call itself was deliberately **not** clicked during this pass — it's a real, billed action against the live wallet, and per the standing project convention this needs your explicit go-ahead each time, not something to trigger automatically while building/testing the surrounding UI.
+7. ✅ Track Order / Order Detail — **done 2026-07-23**, see "Tracking Sync" below. Not yet exercised against a *real* booked shipment (blocked on step 6 above), only confirmed the endpoint/cron wiring is correct and doesn't crash against an empty shipment list.
+8. Download Shipment Documents — still not yet done (existing `getShippingLabel`/`generateShippingLabel` UI lives on `InvoicesPage.jsx`, untouched by this pass).
+
+## Admin Create Shipment UI (implemented 2026-07-23)
+
+The two-step draft→rate→pick-courier→book flow this integration was always designed around (see "Architecture" above) was fully wired up for the first time — previously `OrderDetailPage.jsx`'s "Create Shipment" button called `shipOrder(id)` with **no body at all**, which the backend always rejected (`masterCustomOrderId`/`courierId` are required), so the button never worked.
+
+Now: clicking "Create Shipment" opens a modal that calls `GET /admin/orders/:id/shipping-rates` (existing endpoint, previously unreachable from any UI), shows the real serviceable-courier list with live pricing in a `Radio.Group`, and "Book Shipment" calls `POST /admin/orders/:id/ship` with the admin's actual selection. A "Cancel Shipment" button (calling the existing, previously also-unreachable `POST /admin/orders/:id/cancel-shipment`) was added to the Shipment card too.
+
+**Four real, undocumented bugs surfaced by actually exercising this end-to-end for the first time** (all in `BigshipService.buildB2cOrderPayload`/`getShippingOptions`, all fixed):
+
+1. **`MasterOrderDate: new Date(order.created_at)...` threw `RangeError: Invalid time value`** — `underscored: true` on the `Order` model only renames the *DB column* (`created_at`); the Sequelize instance attribute is still the default `createdAt`. `order.created_at` was always `undefined`. Fixed to `order.createdAt`.
+2. **`"Product name may contain only letters, spaces, dashes, and underscores."`** — real product names ("2 inch (48 mm) 50 meter BOPP...") contain digits and parentheses, which Bigship's `productName` field rejects outright (a live 422, same class of undocumented rule as `warehouseName`'s letters-only requirement). Fixed via a new `sanitizeBigshipProductName()` helper that strips anything outside `[A-Za-z\s\-_]` before sending.
+3. **`"Master order invoice amount must be equal to the sum of all product totalAmount values."`** — `MasterOrderInvoiceAmount` was set to `order.total` (subtotal + GST + shipping), but Bigship validates it against the sum of the `products[].totalAmount` line items only (pre-GST, pre-shipping). Fixed to compute and use that sum instead.
+4. **`"The order invoice number must be unique for your account."`** — `OrderInvoiceNo` was set to the plain `order.order_number`, which never changes — so opening the "Create Shipment" modal a *second* time for the same order (e.g. after closing without booking) always failed, since Bigship's Create Order draft endpoint rejects a repeated invoice number. Fixed by suffixing a timestamp (`${order.order_number}-${Date.now()}`) — this is a Bigship-side draft reference, not this app's real invoice number, so uniquifying it is safe.
+
+**Confirmed real courier-list field names** while fixing the above (the admin frontend's `normalizeCourier()` in `OrderDetailPage.jsx` was written defensively before this, guessing at casings — now confirmed): the rate field is **`total`** (not `totalCharge` as guessed), plus `courierName`, `courierId`, `courierType`, `tat` (transit days), and a nested `riskCharges[0].typeId` (no top-level `riskTypeId`).
+
+## Tracking Sync (implemented 2026-07-23)
+
+`BigshipService.syncShipmentStatus(shipment)` calls `trackOrder()` and writes the result onto the `Shipment` row — used by both a new manual "Refresh Tracking" button (`POST /admin/orders/:id/track` → `OrderController.trackShipment`) and a new cron job (`src/cron/index.js`, every 30 minutes, all shipments with a `bigship_custom_order_id` not yet in a terminal status).
+
+**No confirmed sample Track Order response was available** to hand-derive an exact field mapping from (this call had never been exercised — see Testing step 7 above), so this is deliberately defensive rather than assuming a shape:
+- The full raw response is always saved to a new `Shipment.tracking_response` (JSONB) column.
+- A human-readable status string is best-effort-extracted from whichever field name the real response actually uses (`current_status`/`tracking_status`/`order_status`/`status`/etc.) into a new `Shipment.courier_status_raw` column — so the admin panel always shows *something*, even if the mapping below misses.
+- The internal `Shipment.status` enum is only advanced when that raw text clearly keyword-matches (`delivered`, `out for delivery`, `rto`/`return`, `cancel`/`failed`, `transit`, `picked up`, `pickup`) — an unrecognized shape leaves `status` untouched rather than guessing wrong.
+- New `Shipment.last_tracked_at` column records when each sync last ran, shown in the admin UI.
+
+**Revisit the keyword-matching once a real Track Order response has actually been seen** (i.e. after a real shipment is booked and tracked at least once) — `courier_status_raw` will show exactly what Bigship really sends, at which point the mapping in `mapBigshipStatusToShipmentStatus()` can be tightened from keyword-guessing to an exact match.
+
+## HSN Code Propagation (implemented 2026-07-23)
+
+`OrderItem` never stored `hsn_code`, even though `Product.hsn_code` exists and is populated — so `buildB2cOrderPayload`'s `item.hsn_code || ''` always sent an empty HSN to Bigship for every real shipment. Fixed: new `OrderItem.hsn_code` column, populated in `OrderService.createOrder` from the product record already being fetched there for `product_name`. Falls back to `GST_HSN.DEFAULT.hsn` (constants/index.js) for orders placed before this fix, rather than an empty string.
 
 ### Real Credentials & Warehouse (2026-07-21)
 

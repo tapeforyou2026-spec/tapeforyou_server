@@ -7,6 +7,8 @@ const EmailService = require('./EmailService');
 const InvoiceService = require('./InvoiceService');
 const NotificationService = require('./NotificationService');
 const ShippingService = require('./ShippingService');
+const BigshipService = require('./bigship/BigshipService');
+const logger = require('../utils/logger');
 
 class OrderService {
   async createOrder({ userId, addressId, cartId, couponCode, paymentMethod, notes, trafficSource }) {
@@ -34,11 +36,16 @@ class OrderService {
         // which would silently charge 18% GST even on a genuinely 0%-GST product.
         const gstAmount = parseFloat(((lineTotal * (variant.gst_percent || 18)) / 100).toFixed(2));
 
+        const product = await variant.getProduct();
         subtotal += lineTotal;
         items.push({
           variant_id: variant.id,
-          product_name: (await variant.getProduct()).name,
+          product_name: product.name,
           sku: variant.sku,
+          // Was never carried from Product to OrderItem before, so every
+          // Bigship shipment payload sent an empty HSN field (BigshipService.
+          // buildB2cOrderPayload reads item.hsn_code) — fixed here at source.
+          hsn_code: product.hsn_code || null,
           pack_size: variant.pack_size,
           color: variant.color,
           width: variant.width,
@@ -183,6 +190,45 @@ class OrderService {
     } catch (err) {
       await t.rollback();
       throw err;
+    }
+  }
+
+  // Auto-books a Bigship shipment the moment an order reaches `confirmed` —
+  // no admin "Create Shipment" click involved (2026-07-24 decision: trade the
+  // courier-comparison UX for a fully automatic flow). Called from both
+  // places an Order can transition into `confirmed`:
+  //   - RazorpayService.capturePayment() (prepaid orders, automatic)
+  //   - OrderController.adminUpdateStatus() (COD orders, admin moves the
+  //     status dropdown — this project has no automatic COD-confirm step)
+  // Deliberately never throws — a Bigship failure (rate-limit, no
+  // serviceable courier, account/wallet issue) must never break the payment
+  // confirmation or status-update response that triggered this. On failure,
+  // the order is simply left without a shipment, exactly as if auto-booking
+  // didn't exist — the admin's manual "Create Shipment" modal still works
+  // standalone as a fallback.
+  async autoBookShipmentIfNeeded(orderId) {
+    try {
+      const order = await OrderRepository.findWithDetails(orderId);
+      if (!order || order.status !== 'confirmed' || order.shipment) return;
+
+      const shipment = await BigshipService.autoBookCheapestShipment(order);
+      await order.update({ status: 'shipped' });
+
+      await NotificationService.notifyAdmins({
+        type: 'shipment',
+        title: 'Shipment Auto-Booked',
+        body: `Order #${order.order_number} auto-booked with ${shipment.courier_name || 'Bigship'} (₹${order.shipping_charge})`,
+        data: { order_id: order.id, shipment_id: shipment.id },
+      });
+      logger.info(`Auto-booked Bigship shipment for order #${order.order_number}`);
+    } catch (err) {
+      logger.error(`Auto-book shipment failed for order #${orderId}: ${err.message}`);
+      await NotificationService.notifyAdmins({
+        type: 'shipment',
+        title: 'Auto-Booking Failed',
+        body: `Could not auto-book a shipment for order #${orderId}: ${err.message}. Use "Create Shipment" to book manually.`,
+        data: { order_id: orderId },
+      });
     }
   }
 }
