@@ -39,6 +39,14 @@ const env = {
 
   // Bigship Direct — replaces Shiprocket as the active courier integration.
   // See src/services/bigship/claude.md for the full integration guide.
+  // Cloudinary — product image storage (see config/cloudinary.js). Real
+  // credentials from the project owner's Cloudinary account (2026-07-30).
+  CLOUDINARY: {
+    CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || null,
+    API_KEY: process.env.CLOUDINARY_API_KEY || null,
+    API_SECRET: process.env.CLOUDINARY_API_SECRET || null,
+  },
+
   BIGSHIP: {
     EMAIL: process.env.BIGSHIP_EMAIL,
     PASSWORD: process.env.BIGSHIP_PASSWORD,

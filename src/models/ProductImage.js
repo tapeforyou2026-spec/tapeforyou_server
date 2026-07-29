@@ -3,6 +3,7 @@ module.exports = (sequelize, DataTypes) => sequelize.define('ProductImage', {
   product_id: { type: DataTypes.INTEGER, allowNull: false },
   variant_id: { type: DataTypes.INTEGER, allowNull: true },
   url: { type: DataTypes.STRING(500), allowNull: false },
+  public_id: { type: DataTypes.STRING(255), allowNull: true },
   alt: { type: DataTypes.STRING(200), allowNull: true },
   is_primary: { type: DataTypes.BOOLEAN, defaultValue: false },
   sort_order: { type: DataTypes.INTEGER, defaultValue: 0 },

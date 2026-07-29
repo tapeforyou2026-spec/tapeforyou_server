@@ -4,6 +4,7 @@ const { generateUniqueSlug } = require('../utils/slug');
 const { getPagination, getPaginationMeta } = require('../utils/pagination');
 const ActivityLogService = require('../services/ActivityLogService');
 const { ACTIVITY_MODULES, ACTIVITY_ACTIONS } = require('../constants');
+const CloudinaryService = require('../services/CloudinaryService');
 const R = require('../utils/response');
 
 exports.list = async (req, res) => {
@@ -168,15 +169,17 @@ exports.uploadImages = async (req, res) => {
 
   if (!req.files || !req.files.length) return R.error(res, 'No images uploaded');
 
-  const images = await Promise.all(req.files.map((f, i) =>
-    ProductImage.create({
+  const images = await Promise.all(req.files.map(async (f, i) => {
+    const uploaded = await CloudinaryService.uploadBuffer(f.buffer, 'tapeforyou/products');
+    return ProductImage.create({
       product_id: product.id,
-      url: `/uploads/products/${f.filename}`,
+      url: uploaded.secure_url,
+      public_id: uploaded.public_id,
       alt: `${product.name} image ${i + 1}`,
       is_primary: i === 0,
       sort_order: i,
-    })
-  ));
+    });
+  }));
 
   return R.created(res, 'Images uploaded', images);
 };
@@ -205,6 +208,10 @@ exports.addImageLink = async (req, res) => {
 exports.deleteImage = async (req, res) => {
   const image = await ProductImage.findByPk(req.params.imageId);
   if (!image) return R.notFound(res, 'Image not found');
+  // public_id is only set for images actually uploaded through this app
+  // (Cloudinary) — an admin-pasted external URL (addImageLink) has none,
+  // and there's nothing on Cloudinary to remove for those.
+  if (image.public_id) await CloudinaryService.destroy(image.public_id);
   await image.destroy();
   return R.success(res, 'Image deleted');
 };

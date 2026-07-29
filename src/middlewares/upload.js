@@ -28,7 +28,18 @@ const createUploader = (folder, maxCount = 5) => multer({
   fileFilter: imageFilter,
 });
 
-exports.productImages = createUploader('products').array('images', 5);
+// Product images only go to Cloudinary (see services/CloudinaryService.js) —
+// every other upload above/below still uses local disk storage, untouched.
+// memoryStorage gives req.files[].buffer instead of writing to disk first,
+// since ProductController.uploadImages uploads that buffer straight to
+// Cloudinary and never needs a local copy.
+const productImageUploader = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: env.MAX_FILE_SIZE },
+  fileFilter: imageFilter,
+});
+
+exports.productImages = productImageUploader.array('images', 5);
 exports.categoryImage = createUploader('categories').single('image');
 exports.profileImage = createUploader('profiles').single('avatar');
 exports.heroImages = createUploader('hero').fields([
