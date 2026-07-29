@@ -1,5 +1,6 @@
 const BigshipService = require('./bigship/BigshipService');
 const logger = require('../utils/logger');
+const { calcPackageDimensions } = require('../utils/packageDimensions');
 
 // Warehouse pickup address (Satpur/Trimbakeshwar Rd, Pimpalgaon Bahula, Nashik district).
 const SOURCE_PINCODE = '422213';
@@ -7,59 +8,36 @@ const SOURCE_PINCODE = '422213';
 const FREE_SHIPPING_THRESHOLD = 899;
 const FALLBACK_SHIPPING_CHARGE = 60;
 
-// Pincodes/cities eligible for the free-shipping override (orders UNDER
-// FREE_SHIPPING_THRESHOLD only — see calculateShipping below; confirmed
-// explicitly, this is deliberately the reverse of the usual "bigger order
-// ships free" e-commerce convention). Starts with just the warehouse's own
-// pincode — the business owner is still providing the full list of nearby
-// serviceable areas; expand these arrays once that list arrives rather than
-// hardcoding a guess.
-const FREE_SHIPPING_PINCODES = ['422213'];
-const FREE_SHIPPING_CITIES = [];
-
-function isFreeShippingZone({ pincode, city }) {
-  if (pincode && FREE_SHIPPING_PINCODES.includes(String(pincode).trim())) return true;
-  if (city && FREE_SHIPPING_CITIES.some((c) => c.toLowerCase() === String(city).trim().toLowerCase())) return true;
-  return false;
-}
-
-// Tape-roll weight isn't tracked as clean structured data (ProductVariant.weight
-// is a free-text string like "500 gram" — unreliable to parse), so this mirrors
-// the same fixed-box approximation BigshipService.buildB2cOrderPayload already
-// uses for real shipment booking, scaled by quantity.
-function estimateWeightKg(totalQuantity) {
-  return Math.max(0.5, Math.round(totalQuantity * 0.3 * 100) / 100);
-}
-
 /**
  * Single source of truth for "what does shipping cost for this order" —
  * used by both the public pre-checkout estimator and OrderService.createOrder,
  * so the number shown to a customer and the number actually charged always agree.
  *
- * @param {{ destPincode: string, destCity?: string, subtotal: number, totalQuantity: number, isCod?: boolean }} input
+ * @param {{ destPincode: string, destCity?: string, subtotal: number, totalQuantity: number,
+ *   isCod?: boolean, items?: Array<{ quantity: number, dim_length?: number|null, dim_width?: number|null,
+ *   dim_height?: number|null, gross_weight?: number|null }> }} input
+ * `items`, when provided (real order/cart lines with their variant's real dimensions/weight —
+ * see server/server/CLAUDE.md's "Real Package Dimensions" section), gives a real per-product
+ * box/weight estimate via calcPackageDimensions instead of the flat per-unit approximation.
  * @returns {Promise<{ serviceable: boolean, freeShipping: boolean, shippingCharge: number|null, courierName: string|null, usedFallback: boolean, message?: string }>}
  * `serviceable: false` (with `shippingCharge: null` and a `message`) means Bigship
  * gave a real "no courier serves this pincode" answer — not a technical failure.
  */
-async function calculateShipping({ destPincode, destCity, subtotal, totalQuantity, isCod = false }) {
-  // Computed once and reused below — the fallback branch must respect the
-  // same zone check, not just the order-value threshold, or an address
-  // outside the free-shipping zone could wrongly get free shipping whenever
-  // the live Bigship call happens to fail.
-  //
-  // Explicitly confirmed direction (reconfirmed multiple times, since it's
-  // the reverse of typical e-commerce): orders UNDER ₹899, within the
-  // free-shipping zone, ship free. Orders AT OR ABOVE ₹899 always get a real
-  // shipping charge (Bigship live rate, or the flat fallback), regardless of
-  // zone. Do not "fix" this back to the conventional direction without
-  // reconfirming — this was deliberately flipped from the initial build.
-  const qualifiesForFreeShipping = subtotal < FREE_SHIPPING_THRESHOLD && isFreeShippingZone({ pincode: destPincode, city: destCity });
+async function calculateShipping({ destPincode, destCity, subtotal, totalQuantity, isCod = false, items = null }) {
+  // Standard e-commerce direction (switched 2026-07-28, replacing an earlier
+  // deliberately-reversed rule): orders AT OR ABOVE ₹899 ship free, anywhere
+  // Bigship actually serves. Orders UNDER ₹899 pay the real Bigship rate (or
+  // the flat fallback on a Bigship outage). Deliverability is still checked
+  // via Bigship regardless of order value — free shipping never overrides a
+  // genuine "we don't deliver here" answer.
+  const qualifiesForFreeShipping = subtotal >= FREE_SHIPPING_THRESHOLD;
 
-  if (qualifiesForFreeShipping) {
-    return { serviceable: true, freeShipping: true, shippingCharge: 0, courierName: null, usedFallback: false };
-  }
-
-  const weight = estimateWeightKg(totalQuantity);
+  // Real per-variant dimensions/weight when `items` is passed (see
+  // ProductRepository/OrderService callers); falls back to a single synthetic
+  // line (`{ quantity: totalQuantity }`, no dims) which calcPackageDimensions
+  // resolves to the same flat approximation this used before real
+  // dimensions existed (300g/unit, 20x15x15cm default box).
+  const box = calcPackageDimensions(items && items.length ? items : [{ quantity: totalQuantity }]);
   const ratePayload = {
     segment_type: 'domestic_b2c',
     sourcePincode: SOURCE_PINCODE,
@@ -74,7 +52,13 @@ async function calculateShipping({ destPincode, destCity, subtotal, totalQuantit
     // collectible amount — verified this value is accepted by a real call.
     ...(isCod ? { codAmount: subtotal } : {}),
     riskTypeId: 2,
-    boxes: [{ no_of_box: '1', box_length: '20', box_width: '15', box_height: '15', box_dead_weight: String(weight) }],
+    boxes: [{
+      no_of_box: '1',
+      box_length: String(box.lengthCm),
+      box_width: String(box.widthCm),
+      box_height: String(box.heightCm),
+      box_dead_weight: String(box.weightKg),
+    }],
   };
 
   // These two failure modes are genuinely different and must not share a
@@ -92,7 +76,13 @@ async function calculateShipping({ destPincode, destCity, subtotal, totalQuantit
     rates = await BigshipService.rateCalculator(ratePayload);
   } catch (err) {
     logger.error(`ShippingService.calculateShipping API failure for pincode ${destPincode}: ${err.message}`);
-    return { serviceable: true, freeShipping: false, shippingCharge: FALLBACK_SHIPPING_CHARGE, courierName: null, usedFallback: true };
+    return {
+      serviceable: true,
+      freeShipping: qualifiesForFreeShipping,
+      shippingCharge: qualifiesForFreeShipping ? 0 : FALLBACK_SHIPPING_CHARGE,
+      courierName: null,
+      usedFallback: true,
+    };
   }
 
   const options = Array.isArray(rates.data) ? rates.data : [];
@@ -110,11 +100,11 @@ async function calculateShipping({ destPincode, destCity, subtotal, totalQuantit
   const cheapest = options.reduce((min, c) => (parseFloat(c.totalCharge) < parseFloat(min.totalCharge) ? c : min));
   return {
     serviceable: true,
-    freeShipping: false,
-    shippingCharge: Math.round(parseFloat(cheapest.totalCharge)),
+    freeShipping: qualifiesForFreeShipping,
+    shippingCharge: qualifiesForFreeShipping ? 0 : Math.round(parseFloat(cheapest.totalCharge)),
     courierName: cheapest.courierName || null,
     usedFallback: false,
   };
 }
 
-module.exports = { calculateShipping, isFreeShippingZone, SOURCE_PINCODE, FREE_SHIPPING_THRESHOLD, FALLBACK_SHIPPING_CHARGE };
+module.exports = { calculateShipping, SOURCE_PINCODE, FREE_SHIPPING_THRESHOLD, FALLBACK_SHIPPING_CHARGE };

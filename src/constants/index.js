@@ -43,6 +43,99 @@ const PAYMENT_METHOD = {
   COD: 'cod',
   UPI: 'upi',
   BANK_TRANSFER: 'bank_transfer',
+  HDFC: 'hdfc',
+};
+
+// Real values confirmed against HDFC SmartGateway's Transaction Status
+// documentation (see PAYMENT_DOCUMENTATION.md Part 8) — do not add a value
+// here that hasn't been seen in a real HDFC response or their docs.
+const HDFC_ORDER_STATUS = {
+  NEW: 'NEW',
+  PENDING_VBV: 'PENDING_VBV',
+  AUTHORIZING: 'AUTHORIZING',
+  STARTED: 'STARTED',
+  CHARGED: 'CHARGED',
+  AUTHORIZED: 'AUTHORIZED',
+  AUTHENTICATION_FAILED: 'AUTHENTICATION_FAILED',
+  AUTHORIZATION_FAILED: 'AUTHORIZATION_FAILED',
+  JUSPAY_DECLINED: 'JUSPAY_DECLINED',
+  VOIDED: 'VOIDED',
+  VOID_INITIATED: 'VOID_INITIATED',
+  VOID_FAILED: 'VOID_FAILED',
+  AUTO_REFUNDED: 'AUTO_REFUNDED',
+  CAPTURE_INITIATED: 'CAPTURE_INITIATED',
+  CAPTURE_FAILED: 'CAPTURE_FAILED',
+};
+
+// This project's own internal payment-lifecycle status (Payment.status),
+// separate from HDFC's raw status above — HDFC_STATUS_MAP below is the only
+// place the two are translated into each other.
+const HDFC_PAYMENT_STATUS = {
+  PENDING: 'pending',
+  CREATED: 'created',
+  PROCESSING: 'processing',
+  AUTHORIZED: 'authorized',
+  CAPTURED: 'captured',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+  EXPIRED: 'expired',
+};
+
+// `payments.status` is a real Postgres ENUM restricted to the 5 existing
+// Razorpay-oriented values (pending, paid, failed, refunded,
+// partially_refunded) — extending it wasn't necessary (Part 4's own "only
+// add a column/table if absolutely necessary" principle), so this maps
+// HDFC_PAYMENT_STATUS's finer granularity down onto those 5 values for the
+// actual `payments.status` column. The full granular value is never lost —
+// it's still recorded as-is in `payment_status_history.to_status` (a plain
+// STRING column, no ENUM constraint) for the detailed timeline/audit view.
+const HDFC_TO_PAYMENT_STATUS_COLUMN = {
+  pending: 'pending',
+  created: 'pending',
+  processing: 'pending',
+  authorized: 'pending',
+  captured: 'paid',
+  failed: 'failed',
+  cancelled: 'failed',
+  expired: 'failed',
+};
+
+// See PAYMENT_DOCUMENTATION.md Part 8's status table for the reasoning
+// behind each mapping.
+const HDFC_STATUS_MAP = {
+  [HDFC_ORDER_STATUS.NEW]: HDFC_PAYMENT_STATUS.PENDING,
+  [HDFC_ORDER_STATUS.PENDING_VBV]: HDFC_PAYMENT_STATUS.PROCESSING,
+  [HDFC_ORDER_STATUS.AUTHORIZING]: HDFC_PAYMENT_STATUS.PROCESSING,
+  [HDFC_ORDER_STATUS.STARTED]: HDFC_PAYMENT_STATUS.PROCESSING,
+  [HDFC_ORDER_STATUS.CHARGED]: HDFC_PAYMENT_STATUS.CAPTURED,
+  [HDFC_ORDER_STATUS.AUTHORIZED]: HDFC_PAYMENT_STATUS.AUTHORIZED,
+  [HDFC_ORDER_STATUS.AUTHENTICATION_FAILED]: HDFC_PAYMENT_STATUS.FAILED,
+  [HDFC_ORDER_STATUS.AUTHORIZATION_FAILED]: HDFC_PAYMENT_STATUS.FAILED,
+  [HDFC_ORDER_STATUS.JUSPAY_DECLINED]: HDFC_PAYMENT_STATUS.FAILED,
+  [HDFC_ORDER_STATUS.VOIDED]: HDFC_PAYMENT_STATUS.CANCELLED,
+  [HDFC_ORDER_STATUS.AUTO_REFUNDED]: HDFC_PAYMENT_STATUS.CAPTURED, // refund itself tracked on the Refund row, not the Payment status
+};
+
+const PAYMENT_SESSION_STATUS = {
+  CREATED: 'created',
+  ACTIVE: 'active',
+  EXPIRED: 'expired',
+  SUPERSEDED: 'superseded',
+  CONSUMED: 'consumed',
+};
+
+// Real values confirmed against HDFC's Refund Order API documentation.
+const REFUND_STATUS = {
+  PENDING: 'pending',
+  SUCCESS: 'success',
+  FAILED: 'failed',
+};
+
+const PAYMENT_TRIGGER_SOURCE = {
+  REDIRECT: 'redirect',
+  WEBHOOK: 'webhook',
+  CRON: 'cron',
+  ADMIN: 'admin',
 };
 
 const SHIPMENT_STATUS = {
@@ -168,4 +261,6 @@ module.exports = {
   PAYMENT_METHOD, SHIPMENT_STATUS, COUPON_TYPE, NOTIFICATION_TYPE,
   ADDRESS_TYPE, REVIEW_STATUS, GST_HSN, INDIA_STATES, OTP_PURPOSE, STOCK_IN_STATUS,
   ACTIVITY_MODULES, ACTIVITY_ACTIONS,
+  HDFC_ORDER_STATUS, HDFC_PAYMENT_STATUS, HDFC_STATUS_MAP, HDFC_TO_PAYMENT_STATUS_COLUMN,
+  PAYMENT_SESSION_STATUS, REFUND_STATUS, PAYMENT_TRIGGER_SOURCE,
 };

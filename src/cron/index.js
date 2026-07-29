@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { Op } = require('sequelize');
 const logger = require('../utils/logger');
 const BigshipService = require('../services/bigship/BigshipService');
+const HdfcPaymentService = require('../services/hdfc/HdfcPaymentService');
 const { SHIPMENT_STATUS } = require('../constants');
 
 const TERMINAL_SHIPMENT_STATUSES = [SHIPMENT_STATUS.DELIVERED, SHIPMENT_STATUS.FAILED, SHIPMENT_STATUS.RETURNED];
@@ -75,6 +76,24 @@ function startCronJobs(models) {
       await sleep(1000);
     }
     logger.info(`Cron: tracking-sync checked ${shipments.length} shipment(s), updated ${synced}`);
+  });
+
+  // Every 15 minutes — reconciliation safety net for HDFC payments (see
+  // PAYMENT_DOCUMENTATION.md "Failed Payment Flow" / "Payment Status Update
+  // Flow"). Re-verifies any payment stuck in a non-terminal state
+  // server-to-server — catches a customer who closed the browser before the
+  // redirect-triggered /verify ran, a webhook that never arrived, or a
+  // server restart mid-transaction. Uses the exact same idempotent
+  // state-machine logic /verify and the webhook handler already use
+  // (HdfcPaymentService.applyHdfcStatus), so this can never double-apply an
+  // already-applied result.
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      const { checked, total } = await HdfcPaymentService.reconcileStuckPayments();
+      if (total > 0) logger.info(`Cron: HDFC reconciliation checked ${checked}/${total} stuck payment(s)`);
+    } catch (err) {
+      logger.error(`Cron HDFC reconciliation error: ${err.message}`);
+    }
   });
 
   logger.info('Cron jobs started');

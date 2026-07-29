@@ -84,6 +84,13 @@ class OrderService {
         subtotal,
         totalQuantity,
         isCod: paymentMethod === 'cod',
+        items: cartItems.map((item) => ({
+          quantity: item.quantity,
+          dim_length: item.variant.dim_length,
+          dim_width: item.variant.dim_width,
+          dim_height: item.variant.dim_height,
+          gross_weight: item.variant.gross_weight,
+        })),
       });
       // A real "no courier serves this pincode" answer from Bigship — block
       // the order rather than silently charging a flat fallback fee for a

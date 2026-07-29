@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 
 const env = {
@@ -43,6 +44,33 @@ const env = {
     PASSWORD: process.env.BIGSHIP_PASSWORD,
     ACCESS_KEY: process.env.BIGSHIP_ACCESS_KEY,
     WAREHOUSE_ID: process.env.BIGSHIP_WAREHOUSE_ID || null,
+  },
+
+  // HDFC SmartGateway — see src/services/hdfc/claude.md for the full
+  // integration guide. All null until real credentials are provisioned
+  // (matches this project's existing convention for Bigship/SMSJust before
+  // their real credentials arrived — HdfcGatewayService should fail loudly
+  // with a clear "not configured" error rather than silently no-op).
+  HDFC: {
+    MERCHANT_ID: process.env.HDFC_MERCHANT_ID || null,
+    API_KEY: process.env.HDFC_API_KEY || null,
+    // x-customerid on every call is this project's own User.id (or a guest
+    // marker) — not a separate HDFC-issued credential.
+    BASE_URL: process.env.HDFC_BASE_URL || 'https://smartgateway.hdfc.bank.in',
+    // Sandbox host confirmed in HDFC's docs (smartgateway.hdfcuat.bank.in) —
+    // switch via HDFC_BASE_URL in .env, not a code branch, so prod/sandbox
+    // is a pure config difference like every other third-party base URL here.
+    PAYMENT_PAGE_CLIENT_ID: process.env.HDFC_PAYMENT_PAGE_CLIENT_ID || null,
+    // Webhook receiver auth — the username/password configured in HDFC's
+    // own dashboard (Payments -> Settings -> Webhook Tab), NOT the same as
+    // API_KEY above. Compared against the inbound Authorization header.
+    WEBHOOK_USERNAME: process.env.HDFC_WEBHOOK_USERNAME || null,
+    WEBHOOK_PASSWORD: process.env.HDFC_WEBHOOK_PASSWORD || null,
+    // "Response Key" from SmartGateway dashboard -> only needed if "Use
+    // signed response" is enabled there for HMAC-SHA256 return-URL
+    // verification (see hmac-signature-verification-for-return-url docs).
+    // Null-safe: verification is skipped (not faked) if this isn't set.
+    RESPONSE_KEY: process.env.HDFC_RESPONSE_KEY || null,
   },
 
   // smsjust.com — real transactional-SMS credentials (set 2026-07-22).

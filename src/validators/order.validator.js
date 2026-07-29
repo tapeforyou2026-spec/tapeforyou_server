@@ -3,7 +3,7 @@ const Joi = require('joi');
 exports.createOrder = Joi.object({
   addressId: Joi.number().integer().required(),
   couponCode: Joi.string().uppercase().optional().allow('', null),
-  paymentMethod: Joi.string().valid('razorpay', 'cod', 'upi').required(),
+  paymentMethod: Joi.string().valid('razorpay', 'cod', 'upi', 'hdfc').required(),
   notes: Joi.string().max(500).optional().allow('', null),
   // Optional — the `validate` middleware uses `stripUnknown: true`, so this
   // field silently dropping out of every order was the original bug were

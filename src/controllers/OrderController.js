@@ -37,8 +37,14 @@ exports.createOrder = async (req, res) => {
     trafficSource,
   });
 
+  // HDFC deliberately does NOT create its Payment/session here — unlike
+  // Razorpay's inline-widget flow, HDFC is a redirect-to-hosted-page flow,
+  // so the frontend calls POST /api/payments/session separately once the
+  // customer actually chooses to pay (see HdfcPaymentService.createSession,
+  // which lazily creates the Payment row on that first call — this keeps
+  // session creation idempotent/retryable without touching order-creation).
   let razorpayOrder = null;
-  if (paymentMethod !== 'cod') {
+  if (paymentMethod !== 'cod' && paymentMethod !== 'hdfc') {
     razorpayOrder = await RazorpayService.createOrder(order.total, order.id);
   }
 

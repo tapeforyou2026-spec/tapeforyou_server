@@ -166,7 +166,7 @@ No sandbox exists, so testing = careful, deliberate real calls:
 1. ✅ Login → confirm token returned. **Done 2026-07-21** — real credentials confirmed working.
 2. ✅ Save Warehouse → confirm `warehouseId` returned, set `BIGSHIP_WAREHOUSE_ID`. **Done** — registered the Trambak Road/Pimpalgaon Bahula (422213) warehouse, `warehouseId: 120081`. See "Real Credentials & Warehouse" below for the full story (two undocumented required fields discovered along the way).
 3. ✅ Get Warehouse List → confirm it appears. **Done** — also revealed the account already had a *different*, pre-existing warehouse (id 119959, pincode 422012, Nashik city) that this integration does **not** use; don't confuse the two.
-4. ✅ Rate Calculator (no order created) → confirm pricing looks sane for a real source/destination pincode pair. **Done** — real quotes confirmed: Delhi (110001) ₹136 via Delhivery, Mumbai (400001) ₹94 via Delhivery, both genuine (`usedFallback: false`), plus the free-shipping-zone case (warehouse's own pincode, under ₹899) correctly returns free.
+4. ✅ Rate Calculator (no order created) → confirm pricing looks sane for a real source/destination pincode pair. **Done** — real quotes confirmed: Delhi (110001) ₹136 via Delhivery, Mumbai (400001) ₹94 via Delhivery, both genuine (`usedFallback: false`); the free-shipping case (`subtotal >= ₹899`) correctly returns free regardless of destination — see `server/server/CLAUDE.md`'s shipping section for the current (standard e-commerce) threshold direction.
 5. ✅ Create Order (draft, `domestic_b2c`) → Order Rate Calculation → confirm at least one courier is serviceable. **Done 2026-07-23** — exercised for real via the now-built admin "Create Shipment" modal (see "Admin Create Shipment UI" below); surfaced 4 real, undocumented bugs along the way, all fixed (see that section).
 6. **Place Order** (real) → immediately **Cancel Order** — **still not done**. The modal now reaches the "pick a courier and click Book Shipment" point with real data, but the actual booking call itself was deliberately **not** clicked during this pass — it's a real, billed action against the live wallet, and per the standing project convention this needs your explicit go-ahead each time, not something to trigger automatically while building/testing the surrounding UI.
 7. ✅ Track Order / Order Detail — **done 2026-07-23**, see "Tracking Sync" below. Not yet exercised against a *real* booked shipment (blocked on step 6 above), only confirmed the endpoint/cron wiring is correct and doesn't crash against an empty shipment list.
@@ -244,7 +244,7 @@ Admin panel: `SettingsPage.jsx` gained a "Bigship Wallet" card (top of the page)
 - `domestic_b2b` segment support (payload shape is fully documented, just not built in this first pass — add if/when B2B order volume justifies it).
 - Automated tracking-status polling via a proper cron job (vs. a manual "Refresh Tracking" button, which may be the pragmatic v1 given no webhooks exist).
 - Revisit NDR/RTO/webhooks the moment Bigship documents them.
-- Expand `ShippingService.js`'s `FREE_SHIPPING_PINCODES`/`FREE_SHIPPING_CITIES` once the business owner provides the real list of nearby serviceable areas (currently just the warehouse's own pincode).
+- (Removed 2026-07-28) `ShippingService.js` no longer restricts free shipping to a zone — it now applies anywhere Bigship serves once `subtotal >= FREE_SHIPPING_THRESHOLD`, matching the standard e-commerce rule.
 
 ## Common Issues / Troubleshooting
 

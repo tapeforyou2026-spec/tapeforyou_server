@@ -26,6 +26,14 @@ const Coupon = require('./Coupon')(sequelize, DataTypes);
 const Order = require('./Order')(sequelize, DataTypes);
 const OrderItem = require('./OrderItem')(sequelize, DataTypes);
 const Payment = require('./Payment')(sequelize, DataTypes);
+const PaymentSession = require('./PaymentSession')(sequelize, DataTypes);
+const PaymentTransaction = require('./PaymentTransaction')(sequelize, DataTypes);
+const PaymentLog = require('./PaymentLog')(sequelize, DataTypes);
+const PaymentWebhook = require('./PaymentWebhook')(sequelize, DataTypes);
+const Refund = require('./Refund')(sequelize, DataTypes);
+const RefundTransaction = require('./RefundTransaction')(sequelize, DataTypes);
+const PaymentStatusHistory = require('./PaymentStatusHistory')(sequelize, DataTypes);
+const PaymentAudit = require('./PaymentAudit')(sequelize, DataTypes);
 const Shipment = require('./Shipment')(sequelize, DataTypes);
 const Invoice = require('./Invoice')(sequelize, DataTypes);
 const Notification = require('./Notification')(sequelize, DataTypes);
@@ -134,6 +142,32 @@ OrderItem.belongsTo(ProductVariant, { as: 'variant', foreignKey: 'variant_id' })
 Payment.belongsTo(Order, { foreignKey: 'order_id' });
 Order.hasOne(Payment, { as: 'payment', foreignKey: 'order_id' });
 
+// HDFC payment module — all additive, see PAYMENT_DOCUMENTATION.md Part 4
+PaymentSession.belongsTo(Payment, { foreignKey: 'payment_id' });
+Payment.hasMany(PaymentSession, { as: 'sessions', foreignKey: 'payment_id' });
+
+PaymentTransaction.belongsTo(Payment, { foreignKey: 'payment_id' });
+Payment.hasMany(PaymentTransaction, { as: 'transactions', foreignKey: 'payment_id' });
+
+PaymentLog.belongsTo(Payment, { foreignKey: 'payment_id' });
+Payment.hasMany(PaymentLog, { as: 'logs', foreignKey: 'payment_id' });
+
+PaymentWebhook.belongsTo(Payment, { foreignKey: 'payment_id' });
+Payment.hasMany(PaymentWebhook, { as: 'webhooks', foreignKey: 'payment_id' });
+
+Refund.belongsTo(Payment, { foreignKey: 'payment_id' });
+Payment.hasMany(Refund, { as: 'refunds', foreignKey: 'payment_id' });
+Refund.belongsTo(Admin, { as: 'initiator', foreignKey: 'initiated_by' });
+
+RefundTransaction.belongsTo(Refund, { foreignKey: 'refund_id' });
+Refund.hasMany(RefundTransaction, { as: 'transactions', foreignKey: 'refund_id' });
+
+PaymentStatusHistory.belongsTo(Payment, { foreignKey: 'payment_id' });
+Payment.hasMany(PaymentStatusHistory, { as: 'statusHistory', foreignKey: 'payment_id' });
+
+PaymentAudit.belongsTo(Payment, { foreignKey: 'payment_id' });
+Payment.hasMany(PaymentAudit, { as: 'audit', foreignKey: 'payment_id' });
+
 // Shipment → Order
 Shipment.belongsTo(Order, { foreignKey: 'order_id' });
 Order.hasOne(Shipment, { as: 'shipment', foreignKey: 'order_id' });
@@ -152,6 +186,7 @@ module.exports = {
   Category, Brand, Product, ProductVariant, ProductImage, ProductReview, B2BPricing,
   Cart, CartItem, Wishlist, Address, Coupon, StockIn,
   Order, OrderItem, Payment, Shipment, Invoice,
+  PaymentSession, PaymentTransaction, PaymentLog, PaymentWebhook, Refund, RefundTransaction, PaymentStatusHistory, PaymentAudit,
   Notification, ActivityLog, HeroSlide, AboutPage, OffersHero, Blog, ContactPage, ContactSubmission, NewsletterSubscriber,
   ChatbotFaq, ChatbotLog, Testimonial,
 };

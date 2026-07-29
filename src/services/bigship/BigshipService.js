@@ -3,6 +3,7 @@ const env = require('../../config/env');
 const { Shipment } = require('../../models');
 const { GST_HSN, SHIPMENT_STATUS } = require('../../constants');
 const logger = require('../../utils/logger');
+const { calcPackageDimensions } = require('../../utils/packageDimensions');
 
 // See ./claude.md for the full integration guide — read it before changing this file.
 // No sandbox exists for Bigship; every call here hits production.
@@ -185,6 +186,18 @@ class BigshipService {
     // (pre-GST, pre-shipping), not the order's actual amount-paid total.
     const productsTotal = parseFloat(products.reduce((s, p) => s + p.totalAmount, 0).toFixed(2));
 
+    // Real per-variant dimensions/weight when available (ProductVariant.dim_length/
+    // dim_width/dim_height/gross_weight — see server/server/CLAUDE.md), replacing
+    // the historical flat 20x15x15cm/0.5kg guess this used to always send
+    // regardless of product or quantity.
+    const box = calcPackageDimensions(order.items.map((item) => ({
+      quantity: item.quantity,
+      dim_length: item.variant?.dim_length,
+      dim_width: item.variant?.dim_width,
+      dim_height: item.variant?.dim_height,
+      gross_weight: item.variant?.gross_weight,
+    })));
+
     return {
       segment_type: 'domestic_b2c',
       MasterOrderPickUpLocation: env.BIGSHIP.WAREHOUSE_ID,
@@ -224,7 +237,7 @@ class BigshipService {
         weight_unit: 'kg',
         dimension_unit: 'cm',
         noOfBoxes: 1,
-        dimensions: [{ length: 20, breadth: 15, height: 15, weight: 0.5 }],
+        dimensions: [{ length: box.lengthCm, breadth: box.widthCm, height: box.heightCm, weight: box.weightKg }],
         products,
       }],
     };

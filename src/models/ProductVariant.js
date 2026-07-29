@@ -26,6 +26,8 @@ module.exports = (sequelize, DataTypes) => sequelize.define('ProductVariant', {
   moq_b2b: { type: DataTypes.INTEGER, allowNull: true },
   low_stock_alert: { type: DataTypes.INTEGER, defaultValue: 10 },
   weight: { type: DataTypes.STRING(30), allowNull: true, comment: 'e.g. 500 gram' },
+  net_weight: { type: DataTypes.DECIMAL(10, 2), allowNull: true, comment: 'grams' },
+  gross_weight: { type: DataTypes.DECIMAL(10, 2), allowNull: true, comment: 'grams' },
   dim_length: { type: DataTypes.DECIMAL(8, 2), allowNull: true, comment: 'cm' },
   dim_width: { type: DataTypes.DECIMAL(8, 2), allowNull: true, comment: 'cm' },
   dim_height: { type: DataTypes.DECIMAL(8, 2), allowNull: true, comment: 'cm' },

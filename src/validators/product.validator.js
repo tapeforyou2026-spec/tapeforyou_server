@@ -36,6 +36,8 @@ exports.createVariant = Joi.object({
   moq_b2b: Joi.number().integer().optional().allow(null),
   low_stock_alert: Joi.number().integer().default(10),
   weight: Joi.string().max(30).optional().allow('', null),
+  net_weight: Joi.number().positive().optional().allow(null),
+  gross_weight: Joi.number().positive().optional().allow(null),
   dim_length: Joi.number().optional().allow(null),
   dim_width: Joi.number().optional().allow(null),
   dim_height: Joi.number().optional().allow(null),

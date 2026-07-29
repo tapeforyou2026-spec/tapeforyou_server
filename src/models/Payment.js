@@ -4,6 +4,13 @@ module.exports = (sequelize, DataTypes) => sequelize.define('Payment', {
   razorpay_order_id: { type: DataTypes.STRING(100), allowNull: true },
   razorpay_payment_id: { type: DataTypes.STRING(100), allowNull: true },
   razorpay_signature: { type: DataTypes.STRING(200), allowNull: true },
+  // HDFC SmartGateway — additive, nullable (historical Razorpay rows need
+  // no backfill). `status` itself stays on the existing 5-value ENUM below
+  // (see constants/index.js's HDFC_TO_PAYMENT_STATUS_COLUMN for how HDFC's
+  // richer status vocabulary maps down onto it).
+  gateway: { type: DataTypes.STRING(20), allowNull: true },
+  hdfc_order_id: { type: DataTypes.STRING(100), allowNull: true },
+  idempotency_key: { type: DataTypes.STRING(64), allowNull: true, unique: true },
   amount: { type: DataTypes.DECIMAL(12, 2), allowNull: false },
   currency: { type: DataTypes.STRING(10), defaultValue: 'INR' },
   method: { type: DataTypes.STRING(50), allowNull: true },
