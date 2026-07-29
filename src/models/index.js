@@ -43,6 +43,7 @@ const AboutPage = require('./AboutPage')(sequelize, DataTypes);
 const OffersHero = require('./OffersHero')(sequelize, DataTypes);
 const Blog = require('./Blog')(sequelize, DataTypes);
 const ContactPage = require('./ContactPage')(sequelize, DataTypes);
+const FooterSettings = require('./FooterSettings')(sequelize, DataTypes);
 const ContactSubmission = require('./ContactSubmission')(sequelize, DataTypes);
 const NewsletterSubscriber = require('./NewsletterSubscriber')(sequelize, DataTypes);
 const ChatbotFaq = require('./ChatbotFaq')(sequelize, DataTypes);
@@ -187,6 +188,6 @@ module.exports = {
   Cart, CartItem, Wishlist, Address, Coupon, StockIn,
   Order, OrderItem, Payment, Shipment, Invoice,
   PaymentSession, PaymentTransaction, PaymentLog, PaymentWebhook, Refund, RefundTransaction, PaymentStatusHistory, PaymentAudit,
-  Notification, ActivityLog, HeroSlide, AboutPage, OffersHero, Blog, ContactPage, ContactSubmission, NewsletterSubscriber,
+  Notification, ActivityLog, HeroSlide, AboutPage, OffersHero, Blog, ContactPage, ContactSubmission, NewsletterSubscriber, FooterSettings,
   ChatbotFaq, ChatbotLog, Testimonial,
 };

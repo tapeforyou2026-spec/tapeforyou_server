@@ -119,6 +119,11 @@ router.get('/contact-submissions/:id', contactSubmissionCtrl.adminGet);
 router.put('/contact-submissions/:id/status', contactSubmissionCtrl.adminUpdateStatus);
 router.delete('/contact-submissions/:id', contactSubmissionCtrl.adminDelete);
 
+// Footer Settings (singleton content)
+const footerSettingsCtrl = require('../controllers/FooterSettingsController');
+router.get('/footer-settings', footerSettingsCtrl.adminGet);
+router.put('/footer-settings', footerSettingsCtrl.adminUpdate);
+
 // Newsletter Subscribers
 const newsletterCtrl = require('../controllers/NewsletterController');
 router.get('/newsletter-subscribers', newsletterCtrl.adminList);

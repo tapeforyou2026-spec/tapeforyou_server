@@ -10,6 +10,7 @@ router.use('/about-page', require('./aboutPage.routes'));
 router.use('/offers-hero', require('./offersHero.routes'));
 router.use('/blogs', require('./blog.routes'));
 router.use('/contact-page', require('./contactPage.routes'));
+router.use('/footer-settings', require('./footerSettings.routes'));
 router.use('/contact', require('./contact.routes'));
 router.use('/newsletter', require('./newsletter.routes'));
 router.use('/chatbot', require('./chatbot.routes'));

@@ -1,0 +1,16 @@
+module.exports = (sequelize, DataTypes) => sequelize.define('FooterSettings', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  tagline: { type: DataTypes.TEXT, allowNull: true },
+  phone: { type: DataTypes.STRING(30), allowNull: true },
+  email: { type: DataTypes.STRING(150), allowNull: true },
+  address_line1: { type: DataTypes.STRING(200), allowNull: true },
+  address_line2: { type: DataTypes.STRING(200), allowNull: true },
+  address_line3: { type: DataTypes.STRING(200), allowNull: true },
+  address_line4: { type: DataTypes.STRING(200), allowNull: true },
+  instagram_url: { type: DataTypes.STRING(300), allowNull: true },
+  facebook_url: { type: DataTypes.STRING(300), allowNull: true },
+  twitter_url: { type: DataTypes.STRING(300), allowNull: true },
+  youtube_url: { type: DataTypes.STRING(300), allowNull: true },
+  linkedin_url: { type: DataTypes.STRING(300), allowNull: true },
+  copyright_text: { type: DataTypes.STRING(200), allowNull: true },
+}, { tableName: 'footer_settings', timestamps: true, underscored: true });
