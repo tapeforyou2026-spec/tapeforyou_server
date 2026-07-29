@@ -1,5 +1,6 @@
+const { Op, fn, col } = require('sequelize');
 const HdfcPaymentService = require('../services/hdfc/HdfcPaymentService');
-const { Payment, PaymentStatusHistory, Order, Refund } = require('../models');
+const { Payment, PaymentStatusHistory, Order, Refund, User } = require('../models');
 const ActivityLogService = require('../services/ActivityLogService');
 const { ACTIVITY_MODULES } = require('../constants');
 const R = require('../utils/response');
@@ -100,16 +101,54 @@ exports.getRefund = async (req, res) => {
   return R.success(res, 'Refund fetched', refund);
 };
 
+// Lists every received payment transaction (HDFC, COD, and any legacy
+// Razorpay rows) — not just HDFC as this originally only supported.
+// `gateway` is only ever set to 'hdfc' (null for COD/Razorpay), while
+// `method` is only populated for COD ('cod') today — see constants/index.js's
+// PAYMENT_METHOD. A "method" filter has to check both columns to mean
+// anything to an admin who just sees "HDFC" / "COD" / "Razorpay" as options.
 exports.adminListPayments = async (req, res) => {
   const { getPagination, getPaginationMeta } = require('../utils/pagination');
   const { page, limit, offset } = getPagination(req.query);
-  const { rows, count } = await Payment.findAndCountAll({
-    where: { gateway: 'hdfc' },
-    include: [{ model: Order, attributes: ['id', 'order_number', 'total', 'status'] }],
-    order: [['created_at', 'DESC']],
-    limit, offset,
-  });
-  return R.paginated(res, 'Payments fetched', rows, getPaginationMeta(count, page, limit));
+  const { status, method, date_from, date_to } = req.query;
+
+  const where = {};
+  if (status) where.status = status;
+  if (method) where[Op.or] = [{ gateway: method }, { method }];
+  if (date_from || date_to) {
+    where.created_at = {};
+    if (date_from) where.created_at[Op.gte] = new Date(date_from);
+    if (date_to) where.created_at[Op.lte] = new Date(`${date_to}T23:59:59.999Z`);
+  }
+
+  const include = [{
+    model: Order,
+    attributes: ['id', 'order_number', 'total', 'status', 'payment_status'],
+    include: [{ model: User, attributes: ['id', 'name', 'email'] }],
+  }];
+
+  const [{ rows, count }, summaryRows] = await Promise.all([
+    // gateway_response is a large raw HDFC/Juspay JSON blob (full transaction
+    // detail, EMI info, etc.) — needed on a payment detail view, not a list.
+    Payment.findAndCountAll({ where, include, attributes: { exclude: ['gateway_response'] }, order: [['created_at', 'DESC']], limit, offset }),
+    // Overall totals across every payment matching the current filters —
+    // not just the current page — so the summary cards stay accurate
+    // regardless of which page an admin is looking at.
+    Payment.findAll({
+      where,
+      attributes: ['status', [fn('COUNT', col('Payment.id')), 'count'], [fn('SUM', col('amount')), 'total']],
+      group: ['status'],
+      raw: true,
+    }),
+  ]);
+
+  const summary = {
+    totalCount: summaryRows.reduce((s, r) => s + parseInt(r.count, 10), 0),
+    totalReceived: summaryRows.filter((r) => r.status === 'paid').reduce((s, r) => s + parseFloat(r.total || 0), 0),
+    byStatus: summaryRows.reduce((acc, r) => ({ ...acc, [r.status]: { count: parseInt(r.count, 10), total: parseFloat(r.total || 0) } }), {}),
+  };
+
+  return R.paginated(res, 'Payments fetched', rows, getPaginationMeta(count, page, limit), { summary });
 };
 
 exports.adminListRefunds = async (req, res) => {

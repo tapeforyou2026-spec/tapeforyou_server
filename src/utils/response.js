@@ -20,7 +20,7 @@ const forbidden = (res, message = 'Forbidden') => error(res, message, null, 403)
 
 const serverError = (res, message = 'Internal server error') => error(res, message, null, 500);
 
-const paginated = (res, message, data, pagination) =>
-  res.status(200).json({ success: true, message, data, pagination });
+const paginated = (res, message, data, pagination, extra = {}) =>
+  res.status(200).json({ success: true, message, data, pagination, ...extra });
 
 module.exports = { success, created, error, notFound, unauthorized, forbidden, serverError, paginated };
