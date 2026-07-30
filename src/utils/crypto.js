@@ -20,7 +20,7 @@ const generateInvoiceNumber = () => {
 const generateOrderNumber = () => {
   const date = new Date();
   const ts = date.getTime().toString().slice(-8);
-  return `ORD-${ts}`;
+  return `TFY-${ts}`;
 };
 
 module.exports = { generateOTP, generateToken, hashToken, generateInvoiceNumber, generateOrderNumber };
