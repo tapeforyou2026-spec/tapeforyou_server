@@ -9,8 +9,13 @@ const ADMIN_SCOPE = { user_id: null };
 
 exports.list = async (req, res) => {
   const { page, limit, offset } = getPagination(req.query);
+  const where = { ...ADMIN_SCOPE };
+  if (req.query.type) where.type = req.query.type;
+  if (req.query.is_read === 'true') where.is_read = true;
+  if (req.query.is_read === 'false') where.is_read = false;
+
   const { rows, count } = await Notification.findAndCountAll({
-    where: ADMIN_SCOPE,
+    where,
     order: [['created_at', 'DESC']],
     limit,
     offset,
