@@ -140,7 +140,18 @@ class HdfcPaymentService {
   // session for this payment rather than minting a new HDFC session on
   // every call (duplicate-tab / duplicate-click protection, see
   // PAYMENT_DOCUMENTATION.md Part 3).
-  async createSession(orderId, userId) {
+  // `requestOrigin` is the calling browser's real Origin header (e.g.
+  // "http://localhost:3000") — used to build the return_url HDFC redirects
+  // back to. Previously this always used FRONTEND_URL's *first*
+  // comma-separated entry regardless of which origin the customer was
+  // actually on (FRONTEND_URL supports multiple dev ports, e.g.
+  // "http://localhost:3001,http://localhost:3000") — so a customer
+  // checking out from :3000 would get redirected back to :3001 after
+  // paying, landing on a different browser session/cart entirely. Only
+  // trusted if it's actually one of the allowlisted origins (same list CORS
+  // already validates against) — never used unvalidated, since this
+  // controls where HDFC sends the customer after a real payment.
+  async createSession(orderId, userId, requestOrigin) {
     const order = await Order.findByPk(orderId, { include: [{ model: User }] });
     if (!order) { const e = new Error('Order not found'); e.statusCode = 404; throw e; }
     if (order.user_id !== userId) { const e = new Error('Unauthorized'); e.statusCode = 403; throw e; }
@@ -169,7 +180,11 @@ class HdfcPaymentService {
     const hdfcOrderId = this.buildHdfcOrderId(order.id);
     if (!payment.hdfc_order_id) await payment.update({ hdfc_order_id: hdfcOrderId });
 
-    const returnUrl = `${env.URLS.FRONTEND.split(',')[0].trim()}/payment/hdfc/return?orderId=${order.id}`;
+    const allowedFrontendOrigins = env.URLS.FRONTEND.split(',').map((s) => s.trim());
+    const frontendBase = (requestOrigin && allowedFrontendOrigins.includes(requestOrigin))
+      ? requestOrigin
+      : allowedFrontendOrigins[0];
+    const returnUrl = `${frontendBase}/payment/hdfc/return?orderId=${order.id}`;
     const [firstName, ...lastParts] = (order.User?.name || '').split(' ');
 
     let response;

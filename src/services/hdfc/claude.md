@@ -142,6 +142,14 @@ This confirms the request shape/headers are fundamentally correct — only real 
 5. **Not yet done**: real webhook delivery, real HMAC signature verification (needs `HDFC_RESPONSE_KEY` configured + "Use signed response" enabled).
 6. **Not yet done**: real refund call (needs a real captured payment first).
 
+## Real Bug Found and Fixed — Wrong return_url Origin in Multi-Port Dev Setups (2026-07-31)
+
+`HdfcPaymentService.createSession()` built `return_url` from `env.URLS.FRONTEND.split(',')[0]` — always the **first** comma-separated entry, regardless of which origin the customer was actually browsing from. `FRONTEND_URL=http://localhost:3001,http://localhost:3000` supports two local dev ports (a real, recurring situation this session — duplicate `next dev` instances, manual port fallback when 3000 is already taken, etc.), so a customer checking out from `:3000` would complete payment on HDFC's real hosted page, then get redirected back to `:3001` — a completely different browser tab/session with no cart, no login, looking like a broken/wrong page even though the payment itself succeeded. COD never hit this since it never leaves the current tab.
+
+**Fixed**: `createSession(orderId, userId, requestOrigin)` now takes a third param — the calling browser's real `Origin` header (`PaymentController.createSession`/`.retry` pass `req.headers.origin`) — and uses it for `return_url` **only if it's actually one of the allowlisted `FRONTEND_URL` origins** (same list `app.js`'s CORS check already validates against). An unrecognized/missing origin falls back to the original first-entry behavior — never trusts the header blindly, since it controls where a real payment redirect sends the customer (a naive implementation would be an open-redirect vector).
+
+Verified via the origin-selection logic directly (not a full HTTP round-trip, to avoid an unnecessary real HDFC API call): a customer on `:3000` now correctly gets `:3000` back, `:3001` stays `:3001`, no-Origin and an untrusted origin both safely fall back to the first `FRONTEND_URL` entry.
+
 ## Future Improvements
 
 - Admin Payment/Refund Dashboard UI (`admin/src/pages/payments/`) — backend endpoints (`GET /admin/list`, `GET /admin/refunds`) already exist and were live-tested; no frontend built yet.

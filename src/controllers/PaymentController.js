@@ -13,7 +13,7 @@ const R = require('../utils/response');
 
 exports.createSession = async (req, res) => {
   const { orderId } = req.body;
-  const result = await HdfcPaymentService.createSession(orderId, req.user.id);
+  const result = await HdfcPaymentService.createSession(orderId, req.user.id, req.headers.origin);
   return R.success(res, result.reused ? 'Existing payment session reused' : 'Payment session created', result);
 };
 
@@ -22,7 +22,7 @@ exports.retry = async (req, res) => {
   // for an order whose previous attempt failed/expired; createSession's own
   // non-terminal-session check already handles both cases correctly.
   const { orderId } = req.body;
-  const result = await HdfcPaymentService.createSession(orderId, req.user.id);
+  const result = await HdfcPaymentService.createSession(orderId, req.user.id, req.headers.origin);
   return R.success(res, 'New payment session created', result);
 };
 
