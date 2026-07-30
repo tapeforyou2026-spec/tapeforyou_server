@@ -47,6 +47,11 @@ const env = {
     API_SECRET: process.env.CLOUDINARY_API_SECRET || null,
   },
 
+  // Chatbase — third-party chat widget identity verification (see
+  // controllers/ChatbaseController.js). Only used server-side to sign the
+  // identify JWT; never exposed to the frontend.
+  CHATBASE_SECRET_KEY: process.env.CHATBASE_SECRET_KEY || null,
+
   BIGSHIP: {
     EMAIL: process.env.BIGSHIP_EMAIL,
     PASSWORD: process.env.BIGSHIP_PASSWORD,

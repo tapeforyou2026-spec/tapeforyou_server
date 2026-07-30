@@ -14,6 +14,7 @@ router.use('/footer-settings', require('./footerSettings.routes'));
 router.use('/contact', require('./contact.routes'));
 router.use('/newsletter', require('./newsletter.routes'));
 router.use('/chatbot', require('./chatbot.routes'));
+router.use('/chatbase', require('./chatbase.routes'));
 router.use('/testimonials', require('./testimonial.routes'));
 router.use('/shipping', require('./shipping.routes'));
 router.use('/cart', require('./cart.routes'));
