@@ -49,7 +49,7 @@ exports.register = async (req, res) => {
     email_verify_expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
   });
 
-  await EmailService.sendEmailVerification(user, verifyToken).catch(() => {});
+  await EmailService.sendEmailVerification(user, verifyToken, req.headers.origin).catch(() => {});
   await EmailService.sendWelcome(user).catch(() => {});
   await OtpService.send(user, OTP_PURPOSE.VERIFY_MOBILE).catch(() => {});
 
@@ -173,7 +173,7 @@ exports.resendVerification = async (req, res) => {
       email_verify_token: hashToken(verifyToken),
       email_verify_expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
-    await EmailService.sendEmailVerification(user, verifyToken).catch(() => {});
+    await EmailService.sendEmailVerification(user, verifyToken, req.headers.origin).catch(() => {});
   }
 
   return R.success(res, 'If that account exists and is unverified, a verification email has been sent');

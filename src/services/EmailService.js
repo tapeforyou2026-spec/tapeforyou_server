@@ -58,8 +58,22 @@ class EmailService {
     });
   }
 
-  async sendEmailVerification(user, token) {
-    const link = `${env.URLS.FRONTEND}/verify-email?token=${token}`;
+  // `requestOrigin` is the real browser Origin header from the register/
+  // resend-verification request (e.g. "http://localhost:3000") — only
+  // trusted if it's actually one of the allowlisted FRONTEND_URL entries
+  // (same validated-origin pattern already used for HDFC's return_url; see
+  // HdfcPaymentService.createSession). Blindly using FRONTEND_URL's first
+  // comma-separated entry previously sent real users a link to whichever
+  // dev port happened to be listed first, even when nothing was actually
+  // running there — this fixes that by using the port the customer was
+  // actually on, falling back to the first entry only if no valid origin
+  // was provided (e.g. a server-side call with no request context).
+  async sendEmailVerification(user, token, requestOrigin) {
+    const allowedFrontendOrigins = env.URLS.FRONTEND.split(',').map((s) => s.trim());
+    const frontendBase = (requestOrigin && allowedFrontendOrigins.includes(requestOrigin))
+      ? requestOrigin
+      : allowedFrontendOrigins[0];
+    const link = `${frontendBase}/verify-email?token=${token}`;
     await this.send({
       to: user.email,
       subject: 'Verify Your Email — Tapes For You',
