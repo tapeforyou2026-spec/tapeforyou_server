@@ -49,9 +49,15 @@ exports.register = async (req, res) => {
     email_verify_expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
   });
 
-  await EmailService.sendEmailVerification(user, verifyToken, req.headers.origin).catch(() => {});
-  await EmailService.sendWelcome(user).catch(() => {});
-  await OtpService.send(user, OTP_PURPOSE.VERIFY_MOBILE).catch(() => {});
+  // Fire-and-forget, not awaited — each already swallows its own failure
+  // (.catch below), so the response was never depending on these finishing
+  // anyway. Awaiting them sequentially made /auth/register take 20+ seconds
+  // in practice (SMTP + the SMSJust gateway can each be slow), long enough
+  // to blow past the frontend's 15s request timeout and show the customer a
+  // generic error even though their account was created successfully.
+  EmailService.sendEmailVerification(user, verifyToken, req.headers.origin).catch(() => {});
+  EmailService.sendWelcome(user).catch(() => {});
+  OtpService.send(user, OTP_PURPOSE.VERIFY_MOBILE).catch(() => {});
 
   // Verification is required before login (see AuthController.login), so
   // registration no longer issues tokens / logs the user in immediately.
@@ -144,7 +150,17 @@ exports.verifyEmail = async (req, res) => {
   if (!user || user.email_verify_expires < new Date()) return R.error(res, 'Invalid or expired verification link');
 
   await user.update({ email_verified: true, email_verify_token: null, email_verify_expires: null });
-  return R.success(res, 'Email verified successfully');
+
+  // One-click verify-and-sign-in: clicking a link only they could receive is
+  // at least as strong a proof of identity as typing a password, so issue a
+  // real session here instead of making them separately log in right after —
+  // removes a redundant step from what used to be verify -> /login -> sign in.
+  const { accessToken, refreshToken } = await AuthService.issueTokens(user, req.headers['user-agent'], req.ip);
+  res.cookie('refresh_token', refreshToken, COOKIE_OPTS);
+  setCsrfCookie(res);
+  await recordLoginAttempt({ userId: user.id, identifier: user.email, req, success: true });
+
+  return R.success(res, 'Email verified successfully', { user: user.toPublic(), accessToken });
 };
 
 exports.forgotPassword = async (req, res) => {
