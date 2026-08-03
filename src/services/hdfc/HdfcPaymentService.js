@@ -184,7 +184,16 @@ class HdfcPaymentService {
     const frontendBase = (requestOrigin && allowedFrontendOrigins.includes(requestOrigin))
       ? requestOrigin
       : allowedFrontendOrigins[0];
-    const returnUrl = `${frontendBase}/payment/hdfc/return?orderId=${order.id}`;
+    // Routed through our own backend's /hdfc/return-bridge rather than
+    // straight to the frontend page — the SmartGateway dashboard's "Enable
+    // POST method support for return URL" toggle (on for this merchant
+    // account, and not editable from the dashboard — see
+    // PaymentController.hdfcReturnBridge for the full story) makes HDFC
+    // auto-submit a POST form to return_url instead of a GET redirect, which
+    // the frontend's plain client-side page can't read at all. The bridge
+    // receives whatever HDFC actually sends (GET or POST) and 303-redirects
+    // to this same frontend path as a clean GET with query params.
+    const returnUrl = `${env.URLS.BASE}/api/v1/payments/hdfc/return-bridge?orderId=${order.id}&fb=${encodeURIComponent(frontendBase)}`;
     const [firstName, ...lastParts] = (order.User?.name || '').split(' ');
 
     let response;

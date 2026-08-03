@@ -9,6 +9,12 @@ const v = require('../validators/payment.validator');
 // (hdfcWebhookAuth), not a customer/admin token.
 router.post('/webhook', hdfcWebhookAuth, ctrl.webhook);
 
+// Return-URL bridge — unprotected (the customer's browser hits this
+// directly from HDFC's hosted page, with no app session/token available at
+// that point). Accepts GET or POST — see PaymentController.hdfcReturnBridge
+// for why POST support matters here.
+router.all('/hdfc/return-bridge', ctrl.hdfcReturnBridge);
+
 // Admin-only routes — deliberately registered BEFORE `router.use(protect)`
 // below. `router.use(protect)` applies to every route registered after it
 // on this router instance; putting these admin routes after it would mean

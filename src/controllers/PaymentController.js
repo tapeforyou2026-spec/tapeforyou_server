@@ -4,6 +4,7 @@ const { Payment, PaymentStatusHistory, Order, Refund, User } = require('../model
 const ActivityLogService = require('../services/ActivityLogService');
 const { ACTIVITY_MODULES } = require('../constants');
 const R = require('../utils/response');
+const env = require('../config/env');
 
 // Thin HTTP layer only — all business logic lives in HdfcPaymentService,
 // matching this project's existing Architecture Principles. Thrown errors
@@ -46,6 +47,51 @@ exports.webhook = async (req, res) => {
     require('../utils/logger').error(`HDFC webhook processing error: ${err.message}`);
   }
   return res.status(200).json({ received: true });
+};
+
+// Bridge for HDFC's return_url when "Enable POST method support for return
+// URL" is turned on in the SmartGateway dashboard — HDFC then auto-submits a
+// hidden HTML form (method="POST") to return_url instead of doing a normal
+// GET redirect with query params. The frontend's /payment/hdfc/return page
+// is a plain client component reading useSearchParams(), which only ever
+// sees GET query params — a POST body is invisible to it, which is exactly
+// why customers were landing on "Missing order reference" even for a real,
+// successful payment. This public, unauthenticated endpoint (no req.user —
+// HDFC/the customer's browser hits it directly, not through our own app)
+// accepts either GET or POST, pulls the order reference out of whichever
+// arrived, and 303-redirects the browser to the same frontend page as a
+// clean GET with query params — the frontend page itself needed no changes.
+//
+// `fb` (frontendBase) is embedded in return_url by
+// HdfcPaymentService.createSession at session-creation time, using the same
+// validated-origin logic already used for the direct-GET case — this
+// endpoint only trusts it if it's still one of the allowlisted FRONTEND_URL
+// origins, exactly like that logic does, since it ends up controlling where
+// a real payment redirect sends the customer.
+exports.hdfcReturnBridge = async (req, res) => {
+  const merged = { ...req.query, ...req.body };
+
+  // Prefer our own `orderId` if it survived; HDFC's own `order_id` field
+  // (e.g. "HDFC13") is the fallback — see HdfcPaymentService.buildHdfcOrderId.
+  let orderId = merged.orderId || null;
+  if (!orderId && merged.order_id) {
+    const match = String(merged.order_id).match(/(\d+)$/);
+    if (match) [, orderId] = match;
+  }
+
+  const allowedFrontendOrigins = env.URLS.FRONTEND.split(',').map((s) => s.trim());
+  const frontendBase = (merged.fb && allowedFrontendOrigins.includes(merged.fb))
+    ? merged.fb
+    : allowedFrontendOrigins[0];
+
+  const qs = new URLSearchParams();
+  Object.entries(merged).forEach(([key, value]) => {
+    if (key === 'fb' || key === 'orderId' || value == null) return;
+    qs.set(key, value);
+  });
+  if (orderId) qs.set('orderId', orderId);
+
+  return res.redirect(303, `${frontendBase}/payment/hdfc/return?${qs.toString()}`);
 };
 
 exports.getPayment = async (req, res) => {
