@@ -21,6 +21,7 @@ router.use('/cart', require('./cart.routes'));
 router.use('/wishlist', require('./wishlist.routes'));
 router.use('/orders', require('./order.routes'));
 router.use('/payments', require('./payment.routes'));
+router.use('/returns', require('./return.routes'));
 router.use('/coupons', require('./coupon.routes'));
 router.use('/admin/auth', require('./admin.auth.routes'));
 router.use('/admin', require('./admin.routes'));

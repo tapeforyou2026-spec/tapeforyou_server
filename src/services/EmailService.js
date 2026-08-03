@@ -121,6 +121,40 @@ class EmailService {
     });
   }
 
+  async sendReturnApproved(user, order) {
+    await this.send({
+      to: user.email,
+      subject: `Return Approved — Order #${order.order_number} — Tapes For You`,
+      html: this.wrapTemplate(`
+        <h2 style="margin:0 0 12px;font-size:20px;">Hi ${user.name},</h2>
+        <p style="margin:0 0 20px;font-size:14px;line-height:1.6;">Your return request for order <strong>#${order.order_number}</strong> has been approved. Our team will coordinate pickup/return shipping, and your refund (if applicable) will be processed shortly.</p>
+      `),
+    });
+  }
+
+  async sendReturnRejected(user, order, reason) {
+    await this.send({
+      to: user.email,
+      subject: `Return Request Update — Order #${order.order_number} — Tapes For You`,
+      html: this.wrapTemplate(`
+        <h2 style="margin:0 0 12px;font-size:20px;">Hi ${user.name},</h2>
+        <p style="margin:0 0 20px;font-size:14px;line-height:1.6;">We've reviewed your return request for order <strong>#${order.order_number}</strong> and are unable to approve it${reason ? `: <strong>${reason}</strong>` : '.'}</p>
+        <p style="margin:0;font-size:14px;line-height:1.6;">If you have questions, please reach out to our support team.</p>
+      `),
+    });
+  }
+
+  async sendReturnRefunded(user, order) {
+    await this.send({
+      to: user.email,
+      subject: `Refund Processed — Order #${order.order_number} — Tapes For You`,
+      html: this.wrapTemplate(`
+        <h2 style="margin:0 0 12px;font-size:20px;">Hi ${user.name},</h2>
+        <p style="margin:0 0 20px;font-size:14px;line-height:1.6;">Your refund for order <strong>#${order.order_number}</strong> (₹${order.total}) has been processed. It may take a few business days to reflect in your original payment method.</p>
+      `),
+    });
+  }
+
   async sendShipmentUpdate(user, order, shipment) {
     await this.send({
       to: user.email,

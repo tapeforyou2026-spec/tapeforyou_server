@@ -179,7 +179,12 @@ exports.adminUpdateStatus = async (req, res) => {
   if (!order) return R.notFound(res, 'Order not found');
 
   const previousStatus = order.status;
-  await order.update({ status: req.body.status });
+  // `delivered_at` existed on the schema but nothing ever wrote to it —
+  // needed now so the Return Flow's 7-day return window has a real
+  // timestamp to measure from.
+  const updates = { status: req.body.status };
+  if (req.body.status === 'delivered' && !order.delivered_at) updates.delivered_at = new Date();
+  await order.update(updates);
 
   ActivityLogService.log({
     req, module: ACTIVITY_MODULES.ORDERS, action: ACTIVITY_ACTIONS.ORDER_STATUS_CHANGED,

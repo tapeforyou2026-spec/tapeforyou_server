@@ -31,6 +31,7 @@ const PaymentTransaction = require('./PaymentTransaction')(sequelize, DataTypes)
 const PaymentLog = require('./PaymentLog')(sequelize, DataTypes);
 const PaymentWebhook = require('./PaymentWebhook')(sequelize, DataTypes);
 const Refund = require('./Refund')(sequelize, DataTypes);
+const Return = require('./Return')(sequelize, DataTypes);
 const RefundTransaction = require('./RefundTransaction')(sequelize, DataTypes);
 const PaymentStatusHistory = require('./PaymentStatusHistory')(sequelize, DataTypes);
 const PaymentAudit = require('./PaymentAudit')(sequelize, DataTypes);
@@ -181,13 +182,21 @@ Order.hasOne(Invoice, { as: 'invoice', foreignKey: 'order_id' });
 Notification.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(Notification, { as: 'notifications', foreignKey: 'user_id' });
 
+// Return → Order, User, Admin (reviewer), Refund — whole-order-only scope,
+// one Return row per Order (unique order_id). See ReturnService.js.
+Return.belongsTo(Order, { foreignKey: 'order_id' });
+Order.hasOne(Return, { as: 'return_request', foreignKey: 'order_id' });
+Return.belongsTo(User, { foreignKey: 'user_id' });
+Return.belongsTo(Admin, { as: 'reviewer', foreignKey: 'reviewed_by' });
+Return.belongsTo(Refund, { foreignKey: 'refund_id' });
+
 module.exports = {
   sequelize,
   User, Admin, Role, Permission, RolePermission, AdminRole, RefreshToken, OTP, LoginHistory,
   Category, Brand, Product, ProductVariant, ProductImage, ProductReview, B2BPricing,
   Cart, CartItem, Wishlist, Address, Coupon, StockIn,
   Order, OrderItem, Payment, Shipment, Invoice,
-  PaymentSession, PaymentTransaction, PaymentLog, PaymentWebhook, Refund, RefundTransaction, PaymentStatusHistory, PaymentAudit,
+  PaymentSession, PaymentTransaction, PaymentLog, PaymentWebhook, Refund, RefundTransaction, PaymentStatusHistory, PaymentAudit, Return,
   Notification, ActivityLog, HeroSlide, AboutPage, OffersHero, Blog, ContactPage, ContactSubmission, NewsletterSubscriber, FooterSettings,
   ChatbotFaq, ChatbotLog, Testimonial,
 };

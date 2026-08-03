@@ -187,6 +187,22 @@ const STOCK_IN_STATUS = {
   CANCELLED: 'cancelled',
 };
 
+// Order Return Flow — whole-order-only scope (a customer either returns the
+// entire order or contacts support; see ReturnService.js). A rejected
+// request is terminal, same precedent as Cancel not being re-cancellable.
+const RETURN_STATUS = {
+  REQUESTED: 'requested',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+  REFUNDED: 'refunded',
+};
+
+// Customers can only request a return within this many days of delivery —
+// requires `Order.delivered_at` to actually be set (see
+// OrderController.adminUpdateStatus, which now sets it the first time an
+// order reaches 'delivered' — previously a dead column, never written).
+const RETURN_WINDOW_DAYS = 7;
+
 // Activity Logs / Audit Trail. Only modules with real CRUD in this codebase
 // today are listed — Banners and Website Settings were explicitly deferred
 // (no such features exist yet to log).
@@ -226,6 +242,10 @@ const ACTIVITY_ACTIONS = {
   ORDER_SHIPPED: 'Order Shipped',
   ORDER_DELIVERED: 'Order Delivered',
   ORDER_PAYMENT_RECEIVED: 'Order Payment Received',
+  RETURN_REQUESTED: 'Return Requested',
+  RETURN_APPROVED: 'Return Approved',
+  RETURN_REJECTED: 'Return Rejected',
+  RETURN_REFUNDED: 'Return Refunded',
 
   COUPON_CREATED: 'Coupon Created',
   COUPON_UPDATED: 'Coupon Updated',
@@ -260,6 +280,7 @@ module.exports = {
   ROLES, USER_STATUS, PRODUCT_STATUS, ORDER_STATUS, PAYMENT_STATUS,
   PAYMENT_METHOD, SHIPMENT_STATUS, COUPON_TYPE, NOTIFICATION_TYPE,
   ADDRESS_TYPE, REVIEW_STATUS, GST_HSN, INDIA_STATES, OTP_PURPOSE, STOCK_IN_STATUS,
+  RETURN_STATUS, RETURN_WINDOW_DAYS,
   ACTIVITY_MODULES, ACTIVITY_ACTIONS,
   HDFC_ORDER_STATUS, HDFC_PAYMENT_STATUS, HDFC_STATUS_MAP, HDFC_TO_PAYMENT_STATUS_COLUMN,
   PAYMENT_SESSION_STATUS, REFUND_STATUS, PAYMENT_TRIGGER_SOURCE,

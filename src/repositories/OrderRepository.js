@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const BaseRepository = require('./BaseRepository');
-const { Order, OrderItem, Payment, Shipment, Invoice, User, Address, ProductVariant, Coupon } = require('../models');
+const { Order, OrderItem, Payment, Shipment, Invoice, User, Address, ProductVariant, Coupon, Return } = require('../models');
 
 class OrderRepository extends BaseRepository {
   constructor() {
@@ -17,6 +17,7 @@ class OrderRepository extends BaseRepository {
         { model: User },
         { model: Address, as: 'shipping_address' },
         { model: Coupon },
+        { model: Return, as: 'return_request' },
       ],
     });
   }
