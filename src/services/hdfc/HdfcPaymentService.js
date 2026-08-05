@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { generateToken } = require('../../utils/crypto');
 const {
   sequelize, Order, User, Payment, PaymentSession, PaymentTransaction,
   PaymentLog, PaymentWebhook, PaymentStatusHistory, PaymentAudit, Refund, RefundTransaction,
@@ -27,13 +28,24 @@ const TERMINAL_SESSION_STATUSES = [
 ];
 
 class HdfcPaymentService {
-  // HDFC's `order_id` must be <21 chars, alphanumeric only (confirmed real
-  // constraint) — this project's own "ORD-72073395" order_number has a
-  // hyphen, so it's never reused as-is. Deterministic (not timestamped,
-  // unlike Bigship's OrderInvoiceNo) since the SAME hdfc order_id must be
-  // reused across retries for the Order Status API to find the right order.
-  buildHdfcOrderId(orderId) {
-    return `HDFC${orderId}`;
+  // HDFC's `order_id` must be < 21 chars, alphanumeric only, and — per
+  // HDFC's go-live security-audit requirements (2026-08-04) — NON-SEQUENTIAL.
+  // The original implementation (`HDFC${orderId}`, e.g. "HDFC13"/"HDFC14")
+  // directly exposed this project's own auto-incrementing order id, which is
+  // exactly the predictable-ID pattern that requirement prohibits. This is
+  // cryptographically random instead — 14 hex chars + "HDFC" prefix = 18
+  // chars, safely under the 21-char limit, with no relationship to the
+  // internal order id or to when the order was placed.
+  //
+  // Generated ONCE per payment and stored on Payment.hdfc_order_id (see
+  // createSession below, which only calls this when no value is stored yet)
+  // — never regenerated on retry, since the SAME hdfc order_id must keep
+  // resolving to the same HDFC-side order for the Order Status API to find
+  // it. Because it's no longer derived from the order id, it also can't be
+  // reverse-parsed back to one — see PaymentController.hdfcReturnBridge's
+  // real-DB-lookup fallback, added in lockstep with this change.
+  generateHdfcOrderId() {
+    return `HDFC${generateToken(7)}`;
   }
 
   generateIdempotencyKey() {
@@ -177,7 +189,7 @@ class HdfcPaymentService {
       await existingSession.update({ status: PAYMENT_SESSION_STATUS.EXPIRED });
     }
 
-    const hdfcOrderId = this.buildHdfcOrderId(order.id);
+    const hdfcOrderId = payment.hdfc_order_id || this.generateHdfcOrderId();
     if (!payment.hdfc_order_id) await payment.update({ hdfc_order_id: hdfcOrderId });
 
     const allowedFrontendOrigins = env.URLS.FRONTEND.split(',').map((s) => s.trim());

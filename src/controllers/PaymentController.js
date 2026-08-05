@@ -71,12 +71,18 @@ exports.webhook = async (req, res) => {
 exports.hdfcReturnBridge = async (req, res) => {
   const merged = { ...req.query, ...req.body };
 
-  // Prefer our own `orderId` if it survived; HDFC's own `order_id` field
-  // (e.g. "HDFC13") is the fallback — see HdfcPaymentService.buildHdfcOrderId.
+  // Prefer our own `orderId` if it survived. HDFC's own `order_id` field
+  // (e.g. "HDFC7f3a9c1b2d4e6f") is the fallback for the worst case (HDFC
+  // drops our query string entirely) — it can no longer be reverse-parsed
+  // back to our internal order id the way it briefly could (that string used
+  // to literally be `HDFC${orderId}`; it's now a random, non-sequential
+  // value per HDFC's go-live security-audit requirement — see
+  // HdfcPaymentService.generateHdfcOrderId), so this looks it up for real
+  // against the Payment row it was stored on instead.
   let orderId = merged.orderId || null;
   if (!orderId && merged.order_id) {
-    const match = String(merged.order_id).match(/(\d+)$/);
-    if (match) [, orderId] = match;
+    const payment = await Payment.findOne({ where: { hdfc_order_id: merged.order_id } });
+    if (payment) orderId = payment.order_id;
   }
 
   const allowedFrontendOrigins = env.URLS.FRONTEND.split(',').map((s) => s.trim());

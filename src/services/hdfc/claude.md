@@ -73,7 +73,7 @@ All three confirmed directly from HDFC's official documentation (search results 
 
 Confirmed real constraint: HDFC's `order_id` must be **< 21 characters, alphanumeric only** (no hyphens/underscores). This project's own `order_number` (e.g. `"ORD-72073395"`) has a hyphen, so it can never be reused as-is — same class of surprise already hit twice with Bigship (`warehouseName` letters-only, `OrderInvoiceNo` uniqueness).
 
-**Fix**: `HdfcPaymentService.buildHdfcOrderId(orderId)` → `` `HDFC${orderId}` `` (e.g. `"HDFC42"`) — deterministic (not timestamped, unlike Bigship's `OrderInvoiceNo`), because the *same* HDFC order_id must be reused across retries for the Order Status API to keep finding the right order. Stored on `Payment.hdfc_order_id`.
+**Fix (updated 2026-08-04)**: `HdfcPaymentService.generateHdfcOrderId()` → `` `HDFC${generateToken(7)}` `` (e.g. `"HDFC7f3a9c1b2d4e6f"`, 18 chars) — a cryptographically random value, generated **once** per payment and stored on `Payment.hdfc_order_id`, then always reused on retries (never regenerated) so the Order Status API keeps resolving to the same HDFC-side order. The original version of this (`` `HDFC${orderId}` ``, e.g. `"HDFC42"`) directly embedded this project's own auto-incrementing order id — deterministic, but also fully **sequential and predictable**, which HDFC's go-live security-audit requirements explicitly prohibit ("Should be Non-Sequential"). Since the id is no longer derived from the order id, it also can't be reverse-parsed back to one — `PaymentController.hdfcReturnBridge`'s worst-case fallback (query string dropped entirely) now does a real `Payment.findOne({ where: { hdfc_order_id } })` lookup instead of a regex.
 
 ## HMAC Signature Verification for the Return-URL Redirect
 
