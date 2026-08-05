@@ -88,6 +88,43 @@ class HdfcPaymentService {
     return latest ? latest.to_status : HDFC_PAYMENT_STATUS.PENDING;
   }
 
+  // HDFC's Order Status response carries `refunded`/`amount_refunded` as
+  // fields independent of `status` itself — confirmed via HDFC's own sample
+  // response, which shows `status: "CHARGED"` staying unchanged even after a
+  // full refund, with `refunded: true`/`amount_refunded` as separate top-level
+  // fields. Before this, applyHdfcStatus() only ever read `status`, so a
+  // refund issued from HDFC's own merchant dashboard (bypassing this app's
+  // initiateRefund() entirely) would never be reflected here — this project's
+  // own DB would keep saying "paid" forever while the money was already back
+  // with the customer. Checked on every call (verify/webhook/reconciliation
+  // cron all funnel through applyHdfcStatus), so this catches it regardless
+  // of where the refund actually came from.
+  //
+  // Returns true if it applied (or already reflects) a refunded status — the
+  // caller short-circuits in that case, since a refund is definitionally the
+  // last word on a payment's outcome and must never be overwritten back to a
+  // coarser "paid"/"failed" status by the rest of this function in the same
+  // pass.
+  async _syncExternalRefund(payment, rawResponse) {
+    if (!rawResponse?.refunded) return false;
+    const amountRefunded = parseFloat(rawResponse.amount_refunded || 0);
+    if (!amountRefunded) return false;
+
+    const fullyRefunded = amountRefunded >= parseFloat(payment.amount);
+    const newStatus = fullyRefunded ? 'refunded' : 'partially_refunded';
+    if (payment.status === newStatus) return true; // already reflected — still short-circuit
+
+    await payment.update({ status: newStatus, refund_amount: amountRefunded, refunded_at: payment.refunded_at || new Date() });
+    await Order.update({ payment_status: newStatus }, { where: { id: payment.order_id } });
+    await this.recordAudit({
+      paymentId: payment.id,
+      action: `External refund detected via HDFC Order Status API (₹${amountRefunded})`,
+      newValues: { status: newStatus, refund_amount: amountRefunded },
+    });
+    logger.info(`Payment #${payment.id}: detected out-of-band refund (₹${amountRefunded}) via HDFC Order Status API — not initiated through this app's initiateRefund()`);
+    return true;
+  }
+
   // Single central status-update function — used by verify(), the webhook
   // handler, AND the reconciliation cron, so all three apply the exact same
   // idempotent state-machine logic (see PAYMENT_DOCUMENTATION.md Part 2's
@@ -109,6 +146,8 @@ class HdfcPaymentService {
       amount: rawResponse?.amount ? parseFloat(rawResponse.amount) : payment.amount,
       raw_response: rawResponse || null,
     });
+
+    if (await this._syncExternalRefund(payment, rawResponse)) return payment;
 
     const fromStatus = await this.getGranularStatus(payment.id);
     if (TERMINAL_PAYMENT_STATUSES.includes(fromStatus)) {
@@ -238,6 +277,29 @@ class HdfcPaymentService {
     return { sessionId: session.session_id, redirectUrl: session.redirect_url, reused: false };
   }
 
+  // Shared order_id + amount cross-check — factored out so the exact same
+  // tamper/mismatch protection applies on all three real paths that can
+  // confirm a payment (verify/webhook/reconciliation cron), not just
+  // whichever one a customer's browser happens to hit. Returns null when
+  // both match; otherwise a human-readable reason, so each caller can decide
+  // how to surface it in a way that fits its own context (verify() throws a
+  // 409 to the customer; the webhook/cron paths log and skip since there's
+  // no request to respond to).
+  _validateResponseIntegrity(payment, response) {
+    if (response.order_id !== payment.hdfc_order_id) {
+      return `order_id mismatch (expected ${payment.hdfc_order_id}, got ${response.order_id})`;
+    }
+    // Rounded to paise (×100, integer-compared) so a floating-point/string-
+    // formatting difference from HDFC's side (e.g. "223.020000001") can't
+    // produce a false mismatch.
+    const responseAmount = Math.round(parseFloat(response.amount) * 100);
+    const expectedAmount = Math.round(parseFloat(payment.amount) * 100);
+    if (Number.isNaN(responseAmount) || responseAmount !== expectedAmount) {
+      return `amount mismatch (expected ${payment.amount}, got ${response.amount})`;
+    }
+    return null;
+  }
+
   // --- Mandatory server-to-server verification ---
   // Per HDFC's own docs: "it is mandatory to do a Server-to-Server Order
   // Status API call to determine the final payment status" — the
@@ -277,9 +339,10 @@ class HdfcPaymentService {
 
     // Confirmed real guidance: "verify the order ID and amount" — not just
     // that the call succeeded.
-    if (response.order_id !== payment.hdfc_order_id) {
-      logger.error(`HDFC verify order_id mismatch for payment #${payment.id}: expected ${payment.hdfc_order_id}, got ${response.order_id}`);
-      const e = new Error('Order verification mismatch — flagged, not applied');
+    const mismatch = this._validateResponseIntegrity(payment, response);
+    if (mismatch) {
+      logger.error(`HDFC verify ${mismatch} for payment #${payment.id}`);
+      const e = new Error('Payment verification mismatch — flagged, not applied');
       e.statusCode = 409;
       throw e;
     }
@@ -313,6 +376,20 @@ class HdfcPaymentService {
     }
 
     await webhook.update({ payment_id: payment.id });
+
+    // Same order_id + amount cross-check verify() does — order_id matching
+    // is structurally guaranteed here (it's the lookup key above), but
+    // amount is not, so this still matters. Marked processed either way (a
+    // mismatched event has still been durably handled — rejected, not
+    // silently ignored — so HDFC's retry-until-200 behavior correctly stops
+    // resending it).
+    const mismatch = this._validateResponseIntegrity(payment, orderPayload);
+    if (mismatch) {
+      logger.error(`HDFC webhook ${eventId} ${mismatch} for payment #${payment.id} — not applied`);
+      await webhook.update({ processed: true, processed_at: new Date() });
+      return { deduped: false, resolved: false, mismatch: true };
+    }
+
     await this.applyHdfcStatus(payment, orderPayload.status, orderPayload, PAYMENT_TRIGGER_SOURCE.WEBHOOK);
     await webhook.update({ processed: true, processed_at: new Date() });
     return { deduped: false, resolved: true };
@@ -339,6 +416,14 @@ class HdfcPaymentService {
       try {
         const order = await Order.findByPk(payment.order_id);
         const response = await HdfcGatewayService.getOrderStatus(payment.hdfc_order_id, order?.user_id);
+
+        const mismatch = this._validateResponseIntegrity(payment, response);
+        if (mismatch) {
+          logger.error(`HDFC reconciliation ${mismatch} for payment #${payment.id} — not applied`);
+          checked += 1;
+          continue;
+        }
+
         await this.applyHdfcStatus(payment, response.status, response, PAYMENT_TRIGGER_SOURCE.CRON);
         checked += 1;
       } catch (err) {
