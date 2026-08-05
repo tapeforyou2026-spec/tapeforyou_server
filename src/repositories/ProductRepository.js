@@ -35,6 +35,7 @@ class ProductRepository extends BaseRepository {
     if (filters.status) where.status = filters.status;
     if (filters.category_id) where.category_id = filters.category_id;
     if (filters.brand_id) where.brand_id = filters.brand_id;
+    if (filters.hsn_code) where.hsn_code = filters.hsn_code;
     if (filters.is_featured !== undefined) where.is_featured = filters.is_featured;
     if (filters.q) {
       where[Op.or] = [
